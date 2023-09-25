@@ -1,0 +1,50 @@
+{
+  "canisters": {
+    "internet_identity": {
+      "type": "custom",
+      "shrink": false,
+      "candid": "https://github.com/dfinity/internet-identity/releases/download/release-2023-09-08/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/download/release-2023-09-08/internet_identity_dev.wasm.gz"
+    },
+    "ledger_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icp_ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ledger-canister.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        }
+      }
+    },
+    "dfinity_js_backend": {
+      "main": "src/dfinity_js_backend/src/index.ts",
+      "type": "custom",
+      "build": "npx azle dfinity_js_backend",
+      "root": "src",
+      "ts": "src/dfinity_js_backend/src/index.ts",
+      "candid": "src/dfinity_js_backend/src/index.did",
+      "wasm": ".azle/dfinity_js_backend/dfinity_js_backend.wasm.gz"
+    },
+    "dfinity_js_frontend": {
+      "dependencies": [
+        "dfinity_js_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/dfinity_js_frontend/src/index.html"
+      },
+      "source": [
+        "src/dfinity_js_frontend/src/assets",
+        "dist/dfinity_js_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
