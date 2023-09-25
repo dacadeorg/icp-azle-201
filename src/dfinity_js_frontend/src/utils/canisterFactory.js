@@ -1,5 +1,4 @@
 import { HttpAgent, Actor } from "@dfinity/agent";
-import { getAuthClient } from "./icp";
 import { idlFactory as marketPlaceIDL } from "../../../declarations/dfinity_js_backend/dfinity_js_backend.did.js";
 import { idlFactory as ledgerIDL } from "../../../declarations/ledger_canister/ledger_canister.did.js";
 
@@ -16,12 +15,11 @@ export async function getLedgerCanister() {
 }
 
 async function getCanister(canisterId, idl) {
-    const authClient = await getAuthClient();
+    const authClient = window.auth.client;
     const agent = new HttpAgent({
         host: HOST,
         identity: authClient.getIdentity()
     });
-    console.log("######## Principal: ", authClient.getIdentity().getPrincipal().toText());
     await agent.fetchRootKey();
     return Actor.createActor(idl, {
         agent,

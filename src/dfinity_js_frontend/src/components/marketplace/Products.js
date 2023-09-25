@@ -31,7 +31,7 @@ const Products = () => {
     try {
       setLoading(true);
       const priceStr = data.price;
-      data.price = parseInt(priceStr, 10);
+      data.price = parseInt(priceStr, 10) * 10**8;
       createProduct(data).then((resp) => {
         getProducts();
       });
@@ -45,12 +45,14 @@ const Products = () => {
   };
 
   //  function to initiate transaction
-  const buy = async (id, price) => {
+  const buy = async (id) => {
     try {
       await buyProduct({
         id
-      }).then((resp) => getProducts());
-      toast(<NotificationSuccess text="Product bought successfully" />);
+      }).then((resp) => {
+        getProducts();
+        toast(<NotificationSuccess text="Product bought successfully" />);
+      });
     } catch (error) {
       toast(<NotificationError text="Failed to purchase product." />);
     } finally {

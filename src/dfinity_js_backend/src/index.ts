@@ -170,7 +170,7 @@ export async function completePurchase(seller: Principal, id: nat64, price: nat6
             order.paid_at_block = Opt.Some(block);
             updateSoldAmount(id);
             persistOrder(ic.caller().toText(), order);
-            return makePayment(order.seller, order.price);
+            return response = {order};
         },
         None: () => response = { error: Message.NotFound }
     });
@@ -223,6 +223,7 @@ function updateSoldAmount(productId: nat64) {
     });
 }
 
+// not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
 async function makePayment(to: string, amount: nat64): Promise<Response> {
     let response: Response;
     const toPrincipal = Principal.fromText(to);

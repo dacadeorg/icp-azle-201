@@ -17,7 +17,7 @@ const Product = ({ product, buy }) => {
           <Stack direction="horizontal" gap={2}>
             <span className="font-monospace text-secondary">{seller}</span>
             <Badge bg="secondary" className="ms-auto">
-              {soldAmount} Sold
+              {soldAmount.toString()} Sold
             </Badge>
           </Stack>
         </Card.Header>
@@ -38,7 +38,7 @@ const Product = ({ product, buy }) => {
             onClick={triggerBuy}
             className="w-100 py-3"
           >
-            Buy for {price} ICP
+            Buy for {(price / BigInt(10**8)).toString()} ICP
           </Button>
         </Card.Body>
       </Card>
