@@ -26,6 +26,7 @@ type Product = record {
 type Response = variant {
   id : nat64;
   order : Order;
+  pendingOrders : vec Order;
   orders : vec vec Order;
   error : text;
   caller : text;
@@ -40,6 +41,7 @@ service : () -> {
   deleteProduct : (nat64) -> (Response);
   getAddressFromPrincipal : (principal) -> (text) query;
   getOrders : () -> (Response) query;
+  getPendingOrders : () -> (Response) query;
   getProduct : (nat64) -> (Response) query;
   getProducts : () -> (Response) query;
   updateProduct : (Product) -> (Response);

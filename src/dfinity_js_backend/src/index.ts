@@ -1,4 +1,4 @@
-import { $query, $update, Record, StableBTreeMap, Variant, Vec, match, ic, Principal, Opt, nat64 } from 'azle';
+import { $query, $update, Record, StableBTreeMap, Variant, Vec, match, ic, Principal, Opt, nat64, Duration } from 'azle';
 import {
     Ledger, QueryBlocksResponse, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
 } from 'azle/canisters/ledger';
@@ -43,9 +43,22 @@ type Response = Variant<{
     caller: string;
     products: Vec<Product>;
     orders: Vec<Vec<Order>>;
+    pendingOrders: Vec<Order>;
     id: nat64;
     icpTransferResult: string;
 }>;
+
+enum Message {
+    NotFound = "PRODUCT_NOT_FOUND",
+    InvalidPayload = "INVALID_PAYLOAD",
+    PaymentFailed = "PAYMENT_FAILED",
+    PaymentCompleted = "PAYMENT_COMPLETED",
+};
+
+enum OrderStatus {
+    PaymentPending = "PAYMENT_PENDING",
+    Completed = "COMPLETED"
+}
 
 let idCounter: nat64 = 0n;
 
@@ -65,8 +78,11 @@ let idCounter: nat64 = 0n;
  * 3) 1024 - it's a max size of the value in bytes. 
  * 2 and 3 are not being used directly in the constructor but the Azle compiler utilizes these values during compile time
  */
-const productsStorage = new StableBTreeMap<nat64, Product>(10, 16, 1024);
-const persistedOrders = new StableBTreeMap<string, Vec<Order>>(12, 71, 4096);
+const productsStorage = new StableBTreeMap<nat64, Product>(19, 16, 1024);
+const persistedOrders = new StableBTreeMap<string, Vec<Order>>(20, 71, 4096);
+const pendingOrders = new StableBTreeMap<nat64, Order>(21, 16, 4096);
+
+const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 
 const icpCanister = new Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
 
@@ -81,18 +97,23 @@ export function getOrders(): Response {
 }
 
 $query;
+export function getPendingOrders(): Response {
+    return { pendingOrders: pendingOrders.values() };
+}
+
+$query;
 export function getProduct(id: nat64): Response {
     let response: Response;
     return match(productsStorage.get(id), {
         Some: (product) => response = { product: product },
-        None: () => response = { error: `PRODUCT_NOT_FOUND` }
+        None: () => response = { error: Message.NotFound }
     });
 }
 
 $update;
 export function addProduct(payload: ProducPayload): Response {
     if (typeof payload != 'object' || Object.keys(payload).length === 0) {
-        return { error: `invalid payload` };
+        return { error: Message.InvalidPayload };
     }
     idCounter += 1n;
     let product: Product = { id: idCounter, soldAmount: 0n, seller: ic.caller().toText(), ...payload };
@@ -104,40 +125,36 @@ export function addProduct(payload: ProducPayload): Response {
 $update
 export function createOrder(id: nat64): Response {
     let response: Response;
-    const principal = ic.caller().toText();
     return match(productsStorage.get(id), {
         Some: (product) => {
             const order: Order = {
                 productId: product.id,
                 price: product.price,
-                status: "PAYMENT_PENDING",
+                status: OrderStatus.PaymentPending,
                 seller: product.seller,
                 paid_at_block: Opt.None,
                 memo: generateCorrelationId(id)
             };
-            match(persistedOrders.get(principal), {
-                Some: (orders) => {
-                    orders.push(order);
-                    persistedOrders.insert(principal, orders);
-                },
-                None: () => {
-                    let principalOrders: Order[] = [];
-                    principalOrders.push(order);
-                    persistedOrders.insert(principal, principalOrders);
-                }
-            });
+            pendingOrders.insert(order.memo, order);
+            discardByTimeout(order.memo, ORDER_RESERVATION_PERIOD);
             return response = { order: order };
         },
         None: () => {
-            return response = { error: "PRODUCT_NOT_FOUND" };
+            return response = { error: Message.NotFound };
         }
     });
 }
 
-
 function generateCorrelationId(productId: nat64): nat64 {
     const correlationId = `${productId}_${ic.caller().toText()}_${ic.time()}`;
     return hash(correlationId);
+}
+
+function discardByTimeout(memo: nat64, delay: Duration) {
+    ic.setTimer(delay, () => {
+        const order = pendingOrders.remove(memo);
+        console.log(`Order discarded ${order}`);
+    });
 }
 
 $update;
@@ -145,25 +162,31 @@ export async function completePurchase(seller: Principal, id: nat64, price: nat6
     let response: Response;
     const paymentVerified = await verifyPayment(seller, price, block, memo);
     if (!paymentVerified) {
-        return response = { error: "PAYMENT_NOT_FOUND" };
+        return response = { error: Message.NotFound };
     }
-    return match(persistedOrders.get(ic.caller().toText()), {
-        Some: (orders) => {
-            const orderPosition = orders.findIndex((order) =>
-                order.memo === memo &&
-                order.productId === id &&
-                order.status === "PAYMENT_PENDING"
-            );
-            if (orderPosition >= 0) {
-                orders[orderPosition].status = "COMPLETED";
-                orders[orderPosition].paid_at_block = Opt.Some(block);
-                updateSoldAmount(id);
-                persistedOrders.insert(ic.caller().toText(), orders);
-                return makePayment(orders[orderPosition].seller, orders[orderPosition].price);
-            }
-            return response = { error: "PENDING_ORDER_NOT_FOUND" };
+    return match(pendingOrders.remove(memo), {
+        Some: (order) => {
+            order.status = OrderStatus.Completed;
+            order.paid_at_block = Opt.Some(block);
+            updateSoldAmount(id);
+            persistOrder(ic.caller().toText(), order);
+            return makePayment(order.seller, order.price);
         },
-        None: () => response = { error: "ORDER_NOT_FOUND" }
+        None: () => response = { error: Message.NotFound }
+    });
+}
+
+function persistOrder(principal: string, order: Order) {
+    match(persistedOrders.get(principal), {
+        Some: (orders) => {
+            orders.push(order);
+            persistedOrders.insert(principal, orders);
+        },
+        None: () => {
+            let principalOrders: Order[] = [];
+            principalOrders.push(order);
+            persistedOrders.insert(principal, principalOrders);
+        }
     });
 }
 
@@ -196,7 +219,7 @@ function updateSoldAmount(productId: nat64) {
             product.soldAmount += 1n;
             productsStorage.insert(product.id, product);
         },
-        None: () => { throw Error(`PRODUCT_NOT_FOUND`) }
+        None: () => { throw Error(Message.NotFound) }
     });
 }
 
@@ -220,8 +243,8 @@ async function makePayment(to: string, amount: nat64): Promise<Response> {
         })
         .call()
     return match(transferResult, {
-        Ok: (_) => response = { icpTransferResult: `PAYMENT_COMPLETED` },
-        Err: (err) => response = { error: `PAYMENT_FAILED` }
+        Ok: (_) => response = { icpTransferResult: Message.PaymentCompleted },
+        Err: (err) => response = { error: Message.PaymentFailed }
     });
 }
 
@@ -241,7 +264,7 @@ export function updateProduct(payload: Product): Response {
             productsStorage.insert(product.id, payload);
             return response = { product: payload };
         },
-        None: () => response = { error: `PRODUCT_NOT_FOUND` }
+        None: () => response = { error: Message.NotFound }
     });
 };
 
@@ -250,7 +273,7 @@ export function deleteProduct(id: nat64): Response {
     let response: Response;
     return match(productsStorage.remove(id), {
         Some: (deletedProduct) => response = { id: deletedProduct.id },
-        None: () => response = { error: `PRODUCT_NOT_FOUND` }
+        None: () => response = { error: Message.NotFound }
     });
 };
 
