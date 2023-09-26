@@ -20,7 +20,7 @@ async function getCanister(canisterId, idl) {
         host: HOST,
         identity: authClient.getIdentity()
     });
-    await agent.fetchRootKey();
+    await agent.fetchRootKey(); // this line is needed for the local env only
     return Actor.createActor(idl, {
         agent,
         canisterId,
