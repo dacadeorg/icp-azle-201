@@ -1,5 +1,5 @@
 import { Principal } from "@dfinity/principal";
-import { transferICP} from "./ledger";
+import { transferICP } from "./ledger";
 
 export async function createProduct(product) {
   return window.canister.marketplace.addProduct(product);
@@ -7,7 +7,7 @@ export async function createProduct(product) {
 
 export async function getProducts() {
   try {
-    return (await window.canister.marketplace.getProducts()).products;
+    return await window.canister.marketplace.getProducts();
   } catch (err) {
     if (err.name === "AgentHTTPResponseError") {
       const authClient = window.auth.client;
@@ -17,14 +17,12 @@ export async function getProducts() {
   }
 }
 
-export async function buyProduct(productId) {
-  const id = parseInt(productId.id, 10);
+export async function buyProduct(product) {
   const marketplaceCanister = window.canister.marketplace;
 
-  const orderReseponce = await marketplaceCanister.createOrder(id);
-  const sellerPrincipal = Principal.fromText(orderReseponce.order.seller);
+  const orderReseponce = await marketplaceCanister.createOrder(product.id);
+  const sellerPrincipal = Principal.from(orderReseponce.Ok.seller);
   const sellerAddress = await marketplaceCanister.getAddressFromPrincipal(sellerPrincipal);
-
-  const block = await transferICP(sellerAddress, orderReseponce.order.price, orderReseponce.order.memo);
-  await marketplaceCanister.completePurchase(sellerPrincipal, id, orderReseponce.order.price, block, orderReseponce.order.memo);
+  const block = await transferICP(sellerAddress, orderReseponce.Ok.price, orderReseponce.Ok.memo);
+  await marketplaceCanister.completePurchase(sellerPrincipal, product.id, orderReseponce.Ok.price, block, orderReseponce.Ok.memo);
 }

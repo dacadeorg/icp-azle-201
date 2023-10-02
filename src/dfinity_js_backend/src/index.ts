@@ -1,25 +1,26 @@
-import { $query, $update, Record, StableBTreeMap, Variant, Vec, match, ic, Principal, Opt, nat64, Duration } from 'azle';
+import { $query, $update, Record, StableBTreeMap, Variant, Vec, match, ic, Principal, Opt, nat64, Duration, Result } from 'azle';
 import {
     Ledger, QueryBlocksResponse, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
 } from 'azle/canisters/ledger';
 import { hashCode } from 'hashcode';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * This type represents a product that can be listed on a marketplace.
  * It contains basic properties that are needed to define a product.
  */
 type Product = Record<{
-    id: nat64;
+    id: string;
     title: string;
     description: string;
     location: string;
     price: nat64;
-    seller: string;
+    seller: Principal;
     attachmentURL: string;
     soldAmount: nat64;
 }>;
 
-type ProducPayload = Record<{
+type ProductPayload = Record<{
     title: string;
     description: string;
     location: string;
@@ -28,45 +29,32 @@ type ProducPayload = Record<{
 }>;
 
 type Order = Record<{
-    productId: nat64;
+    productId: string;
     price: nat64;
-    status: string;
-    seller: string;
+    status: OrderStatus;
+    seller: Principal;
     paid_at_block: Opt<nat64>;
     memo: nat64;
 }>;
 
-type Response = Variant<{
-    error: string;
-    product: Product;
-    order: Order;
-    caller: string;
-    products: Vec<Product>;
-    orders: Vec<Vec<Order>>;
-    pendingOrders: Vec<Order>;
-    id: nat64;
-    icpTransferResult: string;
+type Message = Variant<{
+    NotFound: string;
+    InvalidPayload: string;
+    PaymentFailed: string;
+    PaymentCompleted: string;
 }>;
 
-enum Message {
-    NotFound = "PRODUCT_NOT_FOUND",
-    InvalidPayload = "INVALID_PAYLOAD",
-    PaymentFailed = "PAYMENT_FAILED",
-    PaymentCompleted = "PAYMENT_COMPLETED",
-};
-
-enum OrderStatus {
-    PaymentPending = "PAYMENT_PENDING",
-    Completed = "COMPLETED"
-}
-
-let idCounter: nat64 = 0n;
+type OrderStatus = Variant<{
+    PaymentPending: string;
+    Completed: string;
+}>;
 
 /**
  * `productsStorage` - it's a key-value datastructure that is used to store products by sellers.
  * {@link StableBTreeMap} is a self-balancing tree that acts as a durable data storage that keeps data across canister upgrades.
  * For the sake of this contract we've chosen {@link StableBTreeMap} as a storage for the next reasons:
  * - `insert`, `get` and `remove` operations have a constant time complexity - O(1)
+ * - data stored in the map survives canister upgrades unlike using HashMap where data is stored in the heap and it's lost after the canister is upgraded
  * 
  * Brakedown of the `StableBTreeMap<string, Product>` datastructure:
  * - the key of map is a `productId`
@@ -78,8 +66,8 @@ let idCounter: nat64 = 0n;
  * 3) 1024 - it's a max size of the value in bytes. 
  * 2 and 3 are not being used directly in the constructor but the Azle compiler utilizes these values during compile time
  */
-const productsStorage = new StableBTreeMap<nat64, Product>(0, 16, 1024);
-const persistedOrders = new StableBTreeMap<string, Vec<Order>>(1, 71, 4096);
+const productsStorage = new StableBTreeMap<string, Product>(3, 44, 1024);
+const persistedOrders = new StableBTreeMap<Principal, Order>(1, 71, 4096);
 const pendingOrders = new StableBTreeMap<nat64, Order>(2, 16, 4096);
 
 const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
@@ -91,38 +79,36 @@ const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 const icpCanister = new Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
 
 $query;
-export function getProducts(): Response {
-    return { products: productsStorage.values() };
+export function getProducts(): Vec<Product> {
+    return productsStorage.values();
 }
 
 $query;
-export function getOrders(): Response {
-    return { orders: persistedOrders.values() };
+export function getOrders(): Vec<Order> {
+    return persistedOrders.values();
 }
 
 $query;
-export function getPendingOrders(): Response {
-    return { pendingOrders: pendingOrders.values() };
+export function getPendingOrders(): Vec<Order> {
+    return pendingOrders.values();
 }
 
 $query;
-export function getProduct(id: nat64): Response {
-    let response: Response;
+export function getProduct(id: string): Result<Product, Message> {
     return match(productsStorage.get(id), {
-        Some: (product) => response = { product: product },
-        None: () => response = { error: Message.NotFound }
+        Some: (product) => Result.Ok<Product, Message>(product),
+        None: () => Result.Err<Product, Message>({ NotFound: `product with id=${id} not found` })
     });
 }
 
 $update;
-export function addProduct(payload: ProducPayload): Response {
-    if (typeof payload != 'object' || Object.keys(payload).length === 0) {
-        return { error: Message.InvalidPayload };
+export function addProduct(payload: ProductPayload): Result<Product, Message> {
+    if (typeof payload !== 'object' || Object.keys(payload).length === 0) {
+        return Result.Err<Product, Message>({ NotFound: "invalid payoad" })
     }
-    idCounter += 1n;
-    let product: Product = { id: idCounter, soldAmount: 0n, seller: ic.caller().toText(), ...payload };
+    const product: Product = { id: uuidv4(), soldAmount: 0n, seller: ic.caller(), ...payload };
     productsStorage.insert(product.id, product);
-    return { product };
+    return Result.Ok<Product, Message>(product);
 };
 
 /*
@@ -143,29 +129,28 @@ export function addProduct(payload: ProducPayload): Response {
     That's we split this flow into three parts.
 */
 $update
-export function createOrder(id: nat64): Response {
-    let response: Response;
+export function createOrder(id: string): Result<Order, Message> {
     return match(productsStorage.get(id), {
         Some: (product) => {
             const order: Order = {
                 productId: product.id,
                 price: product.price,
-                status: OrderStatus.PaymentPending,
+                status: { PaymentPending: "PAYMENT_PENDING" },
                 seller: product.seller,
                 paid_at_block: Opt.None,
                 memo: generateCorrelationId(id)
             };
             pendingOrders.insert(order.memo, order);
             discardByTimeout(order.memo, ORDER_RESERVATION_PERIOD);
-            return response = { order: order };
+            return Result.Ok<Order, Message>(order);
         },
         None: () => {
-            return response = { error: Message.NotFound };
+            return Result.Err<Order, Message>({ NotFound: `cannot create the order: product=${id} not found` });
         }
     });
 }
 
-function generateCorrelationId(productId: nat64): nat64 {
+function generateCorrelationId(productId: string): nat64 {
     const correlationId = `${productId}_${ic.caller().toText()}_${ic.time()}`;
     return hash(correlationId);
 }
@@ -182,35 +167,19 @@ function discardByTimeout(memo: nat64, delay: Duration) {
 }
 
 $update;
-export async function completePurchase(seller: Principal, id: nat64, price: nat64, block: nat64, memo: nat64): Promise<Response> {
-    let response: Response;
+export async function completePurchase(seller: Principal, id: string, price: nat64, block: nat64, memo: nat64): Promise<Result<Order, Message>> {
     const paymentVerified = await verifyPayment(seller, price, block, memo);
     if (!paymentVerified) {
-        return response = { error: Message.NotFound };
+        return Result.Err<Order, Message>({ NotFound: `cannot complete the purchase: cannot verify the payment, memo=${memo}` });
     }
     return match(pendingOrders.remove(memo), {
         Some: (order) => {
-            order.status = OrderStatus.Completed;
-            order.paid_at_block = Opt.Some(block);
+            const updatedOrder = { ...order, status: { Completed: "COMPLETED" }, paid_at_block: Opt.Some(block) };
             updateSoldAmount(id);
-            persistOrder(ic.caller().toText(), order);
-            return response = {order};
+            persistedOrders.insert(ic.caller(), updatedOrder);
+            return Result.Ok<Order, Message>(updatedOrder);
         },
-        None: () => response = { error: Message.NotFound }
-    });
-}
-
-function persistOrder(principal: string, order: Order) {
-    match(persistedOrders.get(principal), {
-        Some: (orders) => {
-            orders.push(order);
-            persistedOrders.insert(principal, orders);
-        },
-        None: () => {
-            let principalOrders: Order[] = [];
-            principalOrders.push(order);
-            persistedOrders.insert(principal, principalOrders);
-        }
+        None: () => Result.Err<Order, Message>({ NotFound: `cannot complete the purchase: there is no pending order with id=${id}` })
     });
 }
 
@@ -240,23 +209,22 @@ export async function verifyPayment(receiver: Principal, amount: nat64, block: n
             });
             return tx ? true : false;
         },
-        Err: (err) => false
+        Err: (_) => false
     });
 }
 
-function updateSoldAmount(productId: nat64) {
+function updateSoldAmount(productId: string) {
     return match(productsStorage.get(productId), {
         Some: (product) => {
             product.soldAmount += 1n;
             productsStorage.insert(product.id, product);
         },
-        None: () => { throw Error(Message.NotFound) }
+        None: () => { throw Error(`product with id=${productId} not found`) }
     });
 }
 
 // not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
-async function makePayment(to: string, amount: nat64): Promise<Response> {
-    let response: Response;
+async function makePayment(to: string, amount: nat64): Promise<Result<Message, Message>> {
     const toPrincipal = Principal.fromText(to);
     const toAddress = hexAddressFromPrincipal(toPrincipal, 0);
     const transferFee = await getIcpTransferFee();
@@ -275,8 +243,8 @@ async function makePayment(to: string, amount: nat64): Promise<Response> {
         })
         .call()
     return match(transferResult, {
-        Ok: (_) => response = { icpTransferResult: Message.PaymentCompleted },
-        Err: (err) => response = { error: Message.PaymentFailed }
+        Ok: (_) => Result.Ok<Message, Message>({ PaymentCompleted: "payment completed" }),
+        Err: (err) => Result.Err<Message, Message>({ PaymentFailed: `payment failed, err=${err}` })
     });
 }
 
@@ -290,23 +258,21 @@ async function getIcpTransferFee() {
 }
 
 $update;
-export function updateProduct(payload: Product): Response {
-    let response: Response;
+export function updateProduct(payload: Product): Result<Product, Message> {
     return match(productsStorage.get(payload.id), {
         Some: (product) => {
             productsStorage.insert(product.id, payload);
-            return response = { product: payload };
+            return Result.Ok<Product, Message>(payload);
         },
-        None: () => response = { error: Message.NotFound }
+        None: () => Result.Err<Product, Message>({ NotFound: `cannot update the product: product with id=${payload.id} not found` })
     });
 };
 
 $update;
-export function deleteProduct(id: nat64): Response {
-    let response: Response;
+export function deleteProduct(id: string): Result<string, Message> {
     return match(productsStorage.remove(id), {
-        Some: (deletedProduct) => response = { id: deletedProduct.id },
-        None: () => response = { error: Message.NotFound }
+        Some: (deletedProduct) => Result.Ok<string, Message>(deletedProduct.id),
+        None: () => Result.Err<string, Message>({ NotFound: `cannot delete the product: product with id=${id} not found` }),
     });
 };
 
@@ -326,3 +292,16 @@ export function getAddressFromPrincipal(principal: Principal): string {
 function hash(input: any): nat64 {
     return BigInt(Math.abs(hashCode().value(input)));
 }
+
+// a workaround to make uuid package work with Azle
+globalThis.crypto = {
+    getRandomValues: () => {
+        let array = new Uint8Array(32);
+
+        for (let i = 0; i < array.length; i++) {
+            array[i] = Math.floor(Math.random() * 256);
+        }
+
+        return array;
+    }
+};

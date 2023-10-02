@@ -14,7 +14,8 @@
     "start": "webpack serve --mode development --env development",
     "deploy:local": "dfx deploy --network=local",
     "deploy:ic": "dfx deploy --network=ic",
-    "generate": "dfx generate dfinity_js_backend"
+    "generate": "dfx generate dfinity_js_backend",
+    "gen-deploy:local": "dfx generate dfinity_js_backend && dfx deploy --network=local"
   },
   "dependencies": {
     "@dfinity/agent": "^0.19.2",
@@ -38,7 +39,10 @@
     "react-dom": "^17.0.2",
     "react-toastify": "^8.1.0",
     "web-vitals": "^1.0.1",
-    "secp256k1": "^5.0.0"
+    "secp256k1": "^5.0.0",
+    "azle": "0.16.2",
+    "uuid": "^9.0.0",
+    "hashcode": "^1.0.3"
   },
   "devDependencies": {
     "assert": "2.0.0",
@@ -54,16 +58,13 @@
     "webpack": "^5.73.0",
     "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^4.8.1",
-    "azle": "0.16.2",
     "babel-loader": "^8.0.0",
     "@babel/core": "^7.21.8",
     "@babel/preset-react": "^7.18.6",
     "@babel/preset-env": "^7.21.5",
     "file-loader": "^6.2.0",
     "css-loader": "^6.7.3",
-    "style-loader": "^3.3.2",
-    "uuid": "^9.0.0",
-    "hashcode": "^1.0.3"
+    "style-loader": "^3.3.2"
   },
   "engines": {
     "node": "^12 || ^14 || ^16 || ^18"

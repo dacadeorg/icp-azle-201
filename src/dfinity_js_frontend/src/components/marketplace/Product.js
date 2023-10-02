@@ -1,6 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { Card, Button, Col, Badge, Stack } from "react-bootstrap";
+import { Principal } from "@dfinity/principal";
 
 const Product = ({ product, buy }) => {
   const { id, price, title, description, location, attachmentURL, seller, soldAmount } =
@@ -15,7 +16,7 @@ const Product = ({ product, buy }) => {
       <Card className=" h-100">
         <Card.Header>
           <Stack direction="horizontal" gap={2}>
-            <span className="font-monospace text-secondary">{seller}</span>
+            <span className="font-monospace text-secondary">{Principal.from(seller).toText()}</span>
             <Badge bg="secondary" className="ms-auto">
               {soldAmount.toString()} Sold
             </Badge>
@@ -31,7 +32,7 @@ const Product = ({ product, buy }) => {
             <span>{location}</span>
           </Card.Text>
           <Card.Text className="text-secondary">
-            <span>{seller}</span>
+            <span>{Principal.from(seller).toText()}</span>
           </Card.Text>
           <Button
             variant="outline-dark"

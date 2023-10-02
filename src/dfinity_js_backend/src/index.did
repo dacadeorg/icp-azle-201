@@ -1,49 +1,49 @@
+type ManualReply = variant { Ok : Order; Err : Message };
+type Message = variant {
+  PaymentFailed : text;
+  InvalidPayload : text;
+  NotFound : text;
+  PaymentCompleted : text;
+};
 type Order = record {
-  status : text;
+  status : OrderStatus;
   memo : nat64;
-  productId : nat64;
-  seller : text;
+  productId : text;
+  seller : principal;
   price : nat64;
   paid_at_block : opt nat64;
 };
-type ProducPayload = record {
-  attachmentURL : text;
-  title : text;
-  description : text;
-  price : nat64;
-  location : text;
-};
+type OrderStatus = variant { PaymentPending : text; Completed : text };
 type Product = record {
-  id : nat64;
+  id : text;
   attachmentURL : text;
   title : text;
   soldAmount : nat64;
   description : text;
-  seller : text;
+  seller : principal;
   price : nat64;
   location : text;
 };
-type Response = variant {
-  id : nat64;
-  order : Order;
-  pendingOrders : vec Order;
-  orders : vec vec Order;
-  error : text;
-  caller : text;
-  products : vec Product;
-  icpTransferResult : text;
-  product : Product;
+type ProductPayload = record {
+  attachmentURL : text;
+  title : text;
+  description : text;
+  price : nat64;
+  location : text;
 };
+type _AzleResult = variant { Ok : Product; Err : Message };
+type _AzleResult_1 = variant { Ok : Order; Err : Message };
+type _AzleResult_2 = variant { Ok : text; Err : Message };
 service : () -> {
-  addProduct : (ProducPayload) -> (Response);
-  completePurchase : (principal, nat64, nat64, nat64, nat64) -> (Response);
-  createOrder : (nat64) -> (Response);
-  deleteProduct : (nat64) -> (Response);
+  addProduct : (ProductPayload) -> (_AzleResult);
+  completePurchase : (principal, text, nat64, nat64, nat64) -> (ManualReply);
+  createOrder : (text) -> (_AzleResult_1);
+  deleteProduct : (text) -> (_AzleResult_2);
   getAddressFromPrincipal : (principal) -> (text) query;
-  getOrders : () -> (Response) query;
-  getPendingOrders : () -> (Response) query;
-  getProduct : (nat64) -> (Response) query;
-  getProducts : () -> (Response) query;
-  updateProduct : (Product) -> (Response);
+  getOrders : () -> (vec Order) query;
+  getPendingOrders : () -> (vec Order) query;
+  getProduct : (text) -> (_AzleResult) query;
+  getProducts : () -> (vec Product) query;
+  updateProduct : (Product) -> (_AzleResult);
   verifyPayment : (principal, nat64, nat64, nat64) -> (bool) query;
 }
