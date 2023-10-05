@@ -23,7 +23,8 @@
       "root": "src",
       "ts": "src/dfinity_js_backend/src/index.ts",
       "candid": "src/dfinity_js_backend/src/index.did",
-      "wasm": ".azle/dfinity_js_backend/dfinity_js_backend.wasm.gz"
+      "wasm": ".azle/dfinity_js_backend/canister.wasm",
+      "gzip": true
     },
     "dfinity_js_frontend": {
       "dependencies": [
@@ -36,7 +37,8 @@
         "src/dfinity_js_frontend/src/assets",
         "dist/dfinity_js_frontend/"
       ],
-      "type": "assets"
+      "type": "assets",
+      "gzip": true
     }
   },
   "defaults": {
