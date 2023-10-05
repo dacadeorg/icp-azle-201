@@ -17,13 +17,11 @@
       }
     },
     "dfinity_js_backend": {
-      "main": "src/dfinity_js_backend/src/index.ts",
       "type": "custom",
-      "build": "npx azle dfinity_js_backend",
-      "root": "src",
-      "ts": "src/dfinity_js_backend/src/index.ts",
+      "main": "src/dfinity_js_backend/src/index.ts",
       "candid": "src/dfinity_js_backend/src/index.did",
-      "wasm": ".azle/dfinity_js_backend/canister.wasm",
+      "build": "npx azle dfinity_js_backend",
+      "wasm": ".azle/dfinity_js_backend/dfinity_js_backend.wasm",
       "gzip": true
     },
     "dfinity_js_frontend": {
