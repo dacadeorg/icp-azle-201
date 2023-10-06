@@ -47,6 +47,7 @@ const Products = () => {
   //  function to initiate transaction
   const buy = async (id) => {
     try {
+      setLoading(true);
       await buyProduct({
         id
       }).then((resp) => {

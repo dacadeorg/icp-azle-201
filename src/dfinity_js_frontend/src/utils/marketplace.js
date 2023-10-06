@@ -19,10 +19,9 @@ export async function getProducts() {
 
 export async function buyProduct(product) {
   const marketplaceCanister = window.canister.marketplace;
-
-  const orderReseponce = await marketplaceCanister.createOrder(product.id);
-  const sellerPrincipal = Principal.from(orderReseponce.Ok.seller);
+  const orderResponse = await marketplaceCanister.createOrder(product.id);
+  const sellerPrincipal = Principal.from(orderResponse.Ok.seller);
   const sellerAddress = await marketplaceCanister.getAddressFromPrincipal(sellerPrincipal);
-  const block = await transferICP(sellerAddress, orderReseponce.Ok.price, orderReseponce.Ok.memo);
-  await marketplaceCanister.completePurchase(sellerPrincipal, product.id, orderReseponce.Ok.price, block, orderReseponce.Ok.memo);
+  const block = await transferICP(sellerAddress, orderResponse.Ok.price, orderResponse.Ok.memo);
+  await marketplaceCanister.completePurchase(sellerPrincipal, product.id, orderResponse.Ok.price, block, orderResponse.Ok.memo);
 }

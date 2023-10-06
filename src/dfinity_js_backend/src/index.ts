@@ -166,7 +166,6 @@ export default Canister({
         }
         const order = pendingOrderOpt.Some;
         const updatedOrder = { ...order, status: { Completed: "COMPLETED" }, paid_at_block: Some(block) };
-        // updateSoldAmount(id);
         const productOpt = productsStorage.get(id);
         if ("None" in productOpt) {
             throw Error(`product with id=${id} not found`);
@@ -201,9 +200,9 @@ export default Canister({
     makePayment: update([text, nat64], Result(Message, Message), async (to, amount) => {
         const toPrincipal = Principal.fromText(to);
         const toAddress = hexAddressFromPrincipal(toPrincipal, 0);
-        const transferFeeResponse = await icpCanister.transfer_fee({});
-        const transferResult = await icpCanister
-            .transfer({
+        const transferFeeResponse = await ic.call(icpCanister.transfer_fee, { args: [{}] });
+        const transferResult = ic.call(icpCanister.transfer, {
+            args: [{
                 memo: 0n,
                 amount: {
                     e8s: amount
@@ -214,7 +213,8 @@ export default Canister({
                 from_subaccount: None,
                 to: binaryAddressFromAddress(toAddress),
                 created_at_time: None
-            });
+            }]
+        });
         if ("Err" in transferResult) {
             return Err({ PaymentFailed: `payment failed, err=${transferResult.Err}` })
         }
@@ -261,7 +261,7 @@ function discardByTimeout(memo: nat64, delay: Duration) {
 };
 
 async function verifyPaymentInternal(receiver: Principal, amount: nat64, block: nat64, memo: nat64): Promise<bool> {
-    const blockData = await icpCanister.query_blocks({ start: block, length: 1n });
+    const blockData = await ic.call(icpCanister.query_blocks, { args: [{ start: block, length: 1n }] });
     const tx = blockData.blocks.find((block) => {
         if ("None" in block.transaction.operation) {
             return false;
