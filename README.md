@@ -29,7 +29,7 @@ Additionally, the default identity is pre-populated with 1000_000_000_000 e8s wh
 The decimals value for ICP is 10**8.
 
 List identities:
-`dfx ledger identity list`
+`dfx identity list`
 
 Switch to the minter identity:
 `dfx identity use minter`
