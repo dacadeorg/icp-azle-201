@@ -66,9 +66,9 @@ const Message = Variant({
  * 3) 1024 - it's a max size of the value in bytes. 
  * 2 and 3 are not being used directly in the constructor but the Azle compiler utilizes these values during compile time
  */
-const productsStorage = StableBTreeMap(text, Product, 0);
-const persistedOrders = StableBTreeMap(Principal, Order, 1);
-const pendingOrders = StableBTreeMap(nat64, Order, 2);
+const productsStorage = StableBTreeMap(0, text, Product);
+const persistedOrders = StableBTreeMap(1, Principal, Order);
+const pendingOrders = StableBTreeMap(2, nat64, Order);
 
 const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 
