@@ -4,6 +4,14 @@
 3. What is Principal, Identity, Address? https://internetcomputer.org/internet-identity | https://yumimarketplace.medium.com/whats-the-difference-between-principal-id-and-account-id-3c908afdc1f9
 4. Canister-to-canister communication and how multi-canister development is done? https://medium.com/icp-league/explore-backend-multi-canister-development-on-ic-680064b06320
 
+## Getting started
+
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/fxgst/icp-azle-201)
+
+If you rather want to use GitHub Codespaces, click this button instead:
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/fxgst/icp-azle-201?quickstart=1)
+
 ## How to deploy canisters implemented in the course
 
 ### Ledger canister
