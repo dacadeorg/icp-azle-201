@@ -26,3 +26,4 @@ async function getCanister(canisterId, idl) {
         canisterId,
     });
 }
+
