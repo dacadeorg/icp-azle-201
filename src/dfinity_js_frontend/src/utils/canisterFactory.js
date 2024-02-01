@@ -15,7 +15,6 @@ export async function getLedgerCanister() {
 }
 
 async function getCanister(canisterId, idl) {
-    console.log(window.location.origin)
     const authClient = window.auth.client;
     const agent = new HttpAgent({
         host: HOST,
