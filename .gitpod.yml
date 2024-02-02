@@ -7,20 +7,10 @@ tasks:
       sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
       npm install &
       dfx start --background --clean
-      #open README.md
-
-vscode:
-  extensions:
-    - dfinity-foundation.vscode-motoko
-    - tamasfe.even-better-toml
-    - rust-lang.rust-analyzer
+      open README.md
 
 ports:
   - name: Replica
     port: 4943
     visibility: public
     onOpen: ignore
-  - name: Dev Server
-    port: 8080
-    visibility: public
-    onOpen: open-browser

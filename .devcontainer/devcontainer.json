@@ -1,21 +1,16 @@
 {
-	"name": "ICP Hello World Azle",
+	"name": "ICP Azle 201",
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
-	"forwardPorts": [4943, 8080],
+	"forwardPorts": [4943],
     "portsAttributes": {
         "4943": {
             "label": "dfx",
             "onAutoForward": "ignore"
-        },
-        "8080": {
-            "label": "dev server",
-            "onAutoForward": "openBrowser"
         }
     },
 	"onCreateCommand": "nohup bash -c 'dfx start &'",
-    "postCreateCommand": "#mv /pocket-ic ./src/icp_hello_world_rust_backend",
     "postAttachCommand": "([ -f nohup.out ] && (npm i && cat nohup.out && rm nohup.out)) || exit 0",
 	"remoteUser": "root"
 }
