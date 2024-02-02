@@ -12,7 +12,7 @@ If you rather want to use GitHub Codespaces, click this button instead:
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/fxgst/icp-azle-201?quickstart=1)
 
-**NOTE**: After `dfx deploy`, when developing in GitHub Codespaces, run `./canister_url.py` and click the links that are shown there.
+**NOTE**: After `dfx deploy`, when developing in GitHub Codespaces, run `./canister_urls.py` and click the links that are shown there.
 
 [![Open locally in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/fxgst/icp-azle-201)
 
