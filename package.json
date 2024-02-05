@@ -67,7 +67,7 @@
     "style-loader": "^3.3.2"
   },
   "engines": {
-    "node": "^12 || ^14 || ^16 || ^18"
+    "node": "^12 || ^14 || ^16 || ^18 || ^20"
   },
   "browserslist": [
     "last 2 chrome version",

@@ -1,0 +1,16 @@
+tasks:
+  - before: |
+      export PATH="$HOME/bin:$PATH"
+      export DFX_VERSION=0.16.1
+      echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+      sudo apt-get install -q -y libunwind-dev build-essential clang libssl-dev pkg-config
+      sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+      npm install &
+      dfx start --background --clean
+      open README.md
+
+ports:
+  - name: Replica
+    port: 4943
+    visibility: public
+    onOpen: ignore

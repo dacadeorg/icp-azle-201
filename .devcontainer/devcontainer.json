@@ -1,0 +1,16 @@
+{
+	"name": "ICP Azle 201",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"forwardPorts": [4943],
+    "portsAttributes": {
+        "4943": {
+            "label": "dfx",
+            "onAutoForward": "ignore"
+        }
+    },
+	"onCreateCommand": "nohup bash -c 'dfx start &'",
+    "postAttachCommand": "([ -f nohup.out ] && (npm i && cat nohup.out && rm nohup.out)) || exit 0",
+	"remoteUser": "root"
+}
