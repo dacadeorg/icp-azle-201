@@ -1,8 +1,6 @@
 {
 	"name": "ICP Azle 201",
-	"build": {
-		"dockerfile": "Dockerfile"
-	},
+	"image": "ghcr.io/dfinity/icp-dev-env-azle:3",
 	"forwardPorts": [4943],
     "portsAttributes": {
         "4943": {
