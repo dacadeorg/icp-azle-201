@@ -1,74 +1,66 @@
-import { query, update, text, Record, StableBTreeMap, Variant, Vec, None, Some, Ok, Err, ic, Principal, Opt, nat64, Duration, Result, bool, Canister } from "azle";
+import { v4 as uuidv4 } from 'uuid';
+import { Server, StableBTreeMap, ic, Principal, None, nat64, text, bool, Duration } from 'azle';
+import express, { Request, Response } from 'express';
+import bodyParser from 'body-parser';
 import {
     Ledger, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
 } from "azle/canisters/ledger";
 import { hashCode } from "hashcode";
-import { v4 as uuidv4 } from "uuid";
 
 /**
  * This type represents a product that can be listed on a marketplace.
  * It contains basic properties that are needed to define a product.
  */
-const Product = Record({
-    id: text,
-    title: text,
-    description: text,
-    location: text,
-    price: nat64,
-    seller: Principal,
-    attachmentURL: text,
-    soldAmount: nat64
-});
+class Product {
+    id: string;
+    title: string;
+    description: string;
+    location: string;
+    price: number;
+    seller: string;
+    attachmentURL: string;
+    soldAmount: number
+}
 
-const ProductPayload = Record({
-    title: text,
-    description: text,
-    location: text,
-    price: nat64,
-    attachmentURL: text
-});
+class ProductPayload {
+    title: string;
+    description: string;
+    location: string;
+    price: number;
+    attachmentURL: string
+}
 
-const OrderStatus = Variant({
-    PaymentPending: text,
-    Completed: text
-});
+enum OrderStatus {
+    PaymentPending,
+    Completed
+}
 
-const Order = Record({
-    productId: text,
-    price: nat64,
-    status: OrderStatus,
-    seller: Principal,
-    paid_at_block: Opt(nat64),
-    memo: nat64
-});
-
-const Message = Variant({
-    NotFound: text,
-    InvalidPayload: text,
-    PaymentFailed: text,
-    PaymentCompleted: text
-});
+class Order {
+    productId: string;
+    price: number;
+    status: string;
+    seller: string; // Principal
+    paid_at_block: number | null;
+    memo: string
+}
 
 /**
- * `productsStorage` - it's a key-value datastructure that is used to store products by sellers.
+ * `messagesStorage` - it's a key-value datastructure that is used to store messages.
  * {@link StableBTreeMap} is a self-balancing tree that acts as a durable data storage that keeps data across canister upgrades.
  * For the sake of this contract we've chosen {@link StableBTreeMap} as a storage for the next reasons:
  * - `insert`, `get` and `remove` operations have a constant time complexity - O(1)
  * - data stored in the map survives canister upgrades unlike using HashMap where data is stored in the heap and it's lost after the canister is upgraded
  * 
- * Brakedown of the `StableBTreeMap(text, Product)` datastructure:
- * - the key of map is a `productId`
- * - the value in this map is a product itself `Product` that is related to a given key (`productId`)
+ * Brakedown of the `StableBTreeMap(string, Message)` datastructure:
+ * - the key of map is a `messageId`
+ * - the value in this map is a message itself `Message` that is related to a given key (`messageId`)
  * 
  * Constructor values:
- * 1) 0 - memory id where to initialize a map
- * 2) 16 - it's a max size of the key in bytes.
- * 3) 1024 - it's a max size of the value in bytes. 
- * 2 and 3 are not being used directly in the constructor but the Azle compiler utilizes these values during compile time
+ * 1) 0 - memory id where to initialize a map.
  */
-const productsStorage = StableBTreeMap(0, text, Product);
-const persistedOrders = StableBTreeMap(1, Principal, Order);
-const pendingOrders = StableBTreeMap(2, nat64, Order);
+const productsStorage = StableBTreeMap<string, Product>(10);
+const persistedOrders = StableBTreeMap<string, Order>(11); // Principal
+const pendingOrders = StableBTreeMap<string, Order>(12);
 
 const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 
@@ -78,47 +70,71 @@ const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 */
 const icpCanister = Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
 
-export default Canister({
-    getProducts: query([], Vec(Product), () => {
-        return productsStorage.values();
-    }),
-    getOrders: query([], Vec(Order), () => {
-        return persistedOrders.values();
-    }),
-    getPendingOrders: query([], Vec(Order), () => {
-        return pendingOrders.values();
-    }),
-    getProduct: query([text], Result(Product, Message), (id) => {
-        const productOpt = productsStorage.get(id);
-        if ("None" in productOpt) {
-            return Err({ NotFound: `product with id=${id} not found` });
-        }
-        return Ok(productOpt.Some);
-    }),
-    addProduct: update([ProductPayload], Result(Product, Message), (payload) => {
-        if (typeof payload !== "object" || Object.keys(payload).length === 0) {
-            return Err({ NotFound: "invalid payoad" })
-        }
-        const product = { id: uuidv4(), soldAmount: 0n, seller: ic.caller(), ...payload };
-        productsStorage.insert(product.id, product);
-        return Ok(product);
-    }),
+export default Server(() => {
+    const app = express();
+    app.use(bodyParser.json());
 
-    updateProduct: update([Product], Result(Product, Message), (payload) => {
-        const productOpt = productsStorage.get(payload.id);
+    app.get("/products", (req: Request, res: Response) => {
+        res.json(productsStorage.values());
+    });
+
+    app.get("/orders", (req: Request, res: Response) => {
+        res.json(persistedOrders.values());
+    });
+
+    app.get("/pending-orders", (req: Request, res: Response) => {
+        res.json(pendingOrders.values());
+    });
+
+    app.delete("/pending-orders/:memo", (req: Request, res: Response) => {
+        const deletedPendingOrderOpt = pendingOrders.remove(req.params.memo);
+        if ("None" in deletedPendingOrderOpt) {
+            res.status(400).send(`couldn't delete a pending order with memo=${req.params.memo}. order not found`);
+        } else {
+            res.json(deletedPendingOrderOpt.Some);
+        }
+    });
+
+    app.get("/products/:id", (req: Request, res: Response) => {
+        const productId = req.params.id;
+        const productOpt = productsStorage.get(productId);
         if ("None" in productOpt) {
-            return Err({ NotFound: `cannot update the product: product with id=${payload.id} not found` });
+            res.status(404).send(`the product with id=${productId} not found`);
+        } else {
+            res.json(productOpt.Some);
         }
-        productsStorage.insert(productOpt.Some.id, payload);
-        return Ok(payload);
-    }),
-    deleteProduct: update([text], Result(text, Message), (id) => {
-        const deletedProductOpt = productsStorage.remove(id);
+    });
+
+    app.post("/products", (req: Request, res: Response) => {
+        const payload = req.body as ProductPayload;
+        const product = { id: uuidv4(), soldAmount: 0, seller: ic.caller().toHex(), ...payload };
+        productsStorage.insert(product.id, product);
+        return res.json(product);
+    });
+
+    app.put("/products/:id", (req: Request, res: Response) => {
+        const productId = req.params.id;
+        const payload = req.body as ProductPayload;
+        const productOpt = productsStorage.get(productId);
+        if ("None" in productOpt) {
+            res.status(400).send(`couldn't update a product with id=${productId}. product not found`);
+        } else {
+            const product = productOpt.Some;
+            const updatedProduct = { ...product, ...payload, updatedAt: getCurrentDate() };
+            productsStorage.insert(product.id, updatedProduct);
+            res.json(updatedProduct);
+        }
+    });
+
+    app.delete("/products/:id", (req: Request, res: Response) => {
+        const productId = req.params.id;
+        const deletedProductOpt = productsStorage.remove(productId);
         if ("None" in deletedProductOpt) {
-            return Err({ NotFound: `cannot delete the product: product with id=${id} not found` });
+            res.status(400).send(`couldn't delete a product with id=${productId}. product not found`);
+        } else {
+            res.json(deletedProductOpt.Some);
         }
-        return Ok(deletedProductOpt.Some.id);
-    }),
+    });
 
     /*
         on create order we generate a hashcode of the order and then use this number as corelation id (memo) in the transfer function
@@ -137,45 +153,51 @@ export default Canister({
         the caller identity in the `ledger.transfer()` would be the principal of the canister from which we just made this call - in our case it's the marketplace canister.
         That's we split this flow into three parts.
     */
-    createOrder: update([text], Result(Order, Message), (id) => {
-        const productOpt = productsStorage.get(id);
+    app.post("/orders", (req: Request, res: Response) => {
+        const productOpt = productsStorage.get(req.body.productId);
         if ("None" in productOpt) {
-            return Err({ NotFound: `cannot create the order: product=${id} not found` });
+            res.send(`cannot create the order: product=${req.body.productId} not found`);
+        } else {
+            const product = productOpt.Some;
+            const order: Order = {
+                productId: product.id,
+                price: product.price,
+                status: OrderStatus[OrderStatus.PaymentPending],
+                seller: product.seller,
+                paid_at_block: null,
+                memo: generateCorrelationId(req.body.id).toString()
+            };
+            pendingOrders.insert(order.memo, order);
+            discardByTimeout(order.memo, ORDER_RESERVATION_PERIOD);
+            return res.json(order);
         }
-        const product = productOpt.Some;
-        const order = {
-            productId: product.id,
-            price: product.price,
-            status: { PaymentPending: "PAYMENT_PENDING" },
-            seller: product.seller,
-            paid_at_block: None,
-            memo: generateCorrelationId(id)
-        };
-        pendingOrders.insert(order.memo, order);
-        discardByTimeout(order.memo, ORDER_RESERVATION_PERIOD);
-        return Ok(order);
-    }),
-    completePurchase: update([Principal, text, nat64, nat64, nat64], Result(Order, Message), async (seller, id, price, block, memo) => {
+    });
+
+    app.put("/orders/:id", async (req: Request, res: Response) => {
+        const { seller, price, block, memo } = req.body;
         const paymentVerified = await verifyPaymentInternal(seller, price, block, memo);
         if (!paymentVerified) {
-            return Err({ NotFound: `cannot complete the purchase: cannot verify the payment, memo=${memo}` });
+            res.send(`cannot complete the purchase: cannot verify the payment, memo=${memo}`);
+            return;
         }
         const pendingOrderOpt = pendingOrders.remove(memo);
         if ("None" in pendingOrderOpt) {
-            return Err({ NotFound: `cannot complete the purchase: there is no pending order with id=${id}` });
+            res.send(`cannot complete the purchase: there is no pending order with id=${req.params.id}`);
+            return;
         }
         const order = pendingOrderOpt.Some;
-        const updatedOrder = { ...order, status: { Completed: "COMPLETED" }, paid_at_block: Some(block) };
-        const productOpt = productsStorage.get(id);
+        const updatedOrder = { ...order, status: OrderStatus[OrderStatus.Completed], paid_at_block: block };
+        const productOpt = productsStorage.get(req.params.id);
         if ("None" in productOpt) {
-            throw Error(`product with id=${id} not found`);
+            res.status(404).send(`product with id=${req.params.id} not found`);
+            return;
         }
         const product = productOpt.Some;
-        product.soldAmount += 1n;
+        product.soldAmount += 1;
         productsStorage.insert(product.id, product);
-        persistedOrders.insert(ic.caller(), updatedOrder);
-        return Ok(updatedOrder);
-    }),
+        persistedOrders.insert(ic.caller().toHex(), updatedOrder);
+        res.json(updatedOrder);
+    });
 
     /*
         another example of a canister-to-canister communication
@@ -184,28 +206,35 @@ export default Canister({
         The `length` parameter is set to 1 to limit the return amount of blocks.
         In this function we verify all the details about the transaction to make sure that we can mark the order as completed
     */
-    verifyPayment: query([Principal, nat64, nat64, nat64], bool, async (receiver, amount, block, memo) => {
-        return await verifyPaymentInternal(receiver, amount, block, memo);
-    }),
+    app.get("/verify-payment", async (req: Request, res: Response) => {
+        const memo = req.query.memo as unknown as nat64;
+        const receiver: string = req.query.receiver as string;
+        const amount = req.query.amount as unknown as nat64;
+        const block = req.query.block as unknown as nat64;
+        const receiverPrincipal = Principal.fromHex(receiver);
+        const payment = await verifyPaymentInternal(receiverPrincipal, amount, block, memo);
+        res.json(payment);
+    });
 
     /*
         a helper function to get address from the principal
         the address is later used in the transfer method
     */
-    getAddressFromPrincipal: query([Principal], text, (principal) => {
-        return hexAddressFromPrincipal(principal, 0);
-    }),
+    app.get("/principal-to-address/:principalHex", (req: Request, res: Response) => {
+        const principal = Principal.fromHex(req.params.principalHex);
+        res.json(hexAddressFromPrincipal(principal, 0));
+    });
 
     // not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
-    makePayment: update([text, nat64], Result(Message, Message), async (to, amount) => {
-        const toPrincipal = Principal.fromText(to);
+    app.put("/payment/:id", async (req: Request, res: Response) => {
+        const toPrincipal = Principal.fromText(req.body.to);
         const toAddress = hexAddressFromPrincipal(toPrincipal, 0);
         const transferFeeResponse = await ic.call(icpCanister.transfer_fee, { args: [{}] });
         const transferResult = ic.call(icpCanister.transfer, {
             args: [{
                 memo: 0n,
                 amount: {
-                    e8s: amount
+                    e8s: req.body.amount
                 },
                 fee: {
                     e8s: transferFeeResponse.transfer_fee.e8s
@@ -216,35 +245,24 @@ export default Canister({
             }]
         });
         if ("Err" in transferResult) {
-            return Err({ PaymentFailed: `payment failed, err=${transferResult.Err}` })
+            res.send(`payment failed, err=${transferResult.Err}`);
+            return;
         }
-        return Ok({ PaymentCompleted: "payment completed" });
-    })
+        res.send("payment completed");
+    });
+
+    return app.listen();
 });
 
 /*
     a hash function that is used to generate correlation ids for orders.
     also, we use that in the verifyPayment function where we check if the used has actually paid the order
 */
-function hash(input: any): nat64 {
+function hash(input: any): bigint {
     return BigInt(Math.abs(hashCode().value(input)));
 };
 
-// a workaround to make uuid package work with Azle
-globalThis.crypto = {
-    // @ts-ignore
-    getRandomValues: () => {
-        let array = new Uint8Array(32);
-
-        for (let i = 0; i < array.length; i++) {
-            array[i] = Math.floor(Math.random() * 256);
-        }
-
-        return array;
-    }
-};
-
-function generateCorrelationId(productId: text): nat64 {
+function generateCorrelationId(productId: text): bigint {
     const correlationId = `${productId}_${ic.caller().toText()}_${ic.time()}`;
     return hash(correlationId);
 };
@@ -253,10 +271,10 @@ function generateCorrelationId(productId: text): nat64 {
     after the order is created, we give the `delay` amount of minutes to pay for the order.
     if it's not paid during this timeframe, the order is automatically removed from the pending orders.
 */
-function discardByTimeout(memo: nat64, delay: Duration) {
+function discardByTimeout(memo: string, delay: Duration) {
     ic.setTimer(delay, () => {
         const order = pendingOrders.remove(memo);
-        console.log(`Order discarded ${order}`);
+        console.log(`Order discarded: memo=${order?.Some?.memo}, productId=${order?.Some?.productId}`);
     });
 };
 
@@ -276,3 +294,8 @@ async function verifyPaymentInternal(receiver: Principal, amount: nat64, block: 
     });
     return tx ? true : false;
 };
+
+function getCurrentDate() {
+    const timestamp = new Number(ic.time());
+    return new Date(timestamp.valueOf() / 1000_000);
+}
