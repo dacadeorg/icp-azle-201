@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Server, StableBTreeMap, ic, Principal, None, nat64, text, bool, Duration } from 'azle';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import bodyParser from 'body-parser';
 import {
     Ledger, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
@@ -58,9 +59,9 @@ class Order {
  * Constructor values:
  * 1) 0 - memory id where to initialize a map.
  */
-const productsStorage = StableBTreeMap<string, Product>(10);
-const persistedOrders = StableBTreeMap<string, Order>(11); // Principal
-const pendingOrders = StableBTreeMap<string, Order>(12);
+const productsStorage = StableBTreeMap<string, Product>(33);
+const persistedOrders = StableBTreeMap<string, Order>(34);
+const pendingOrders = StableBTreeMap<string, Order>(35);
 
 const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 
@@ -72,6 +73,8 @@ const icpCanister = Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
 
 export default Server(() => {
     const app = express();
+    // only for development purposes. For production-ready apps one must configure CORS appropriately
+    app.use(cors());
     app.use(bodyParser.json());
 
     app.get("/products", (req: Request, res: Response) => {
@@ -107,7 +110,7 @@ export default Server(() => {
 
     app.post("/products", (req: Request, res: Response) => {
         const payload = req.body as ProductPayload;
-        const product = { id: uuidv4(), soldAmount: 0, seller: ic.caller().toHex(), ...payload };
+        const product = { id: uuidv4(), soldAmount: 0, seller: ic.caller().toText(), ...payload };
         productsStorage.insert(product.id, product);
         return res.json(product);
     });
@@ -195,7 +198,7 @@ export default Server(() => {
         const product = productOpt.Some;
         product.soldAmount += 1;
         productsStorage.insert(product.id, product);
-        persistedOrders.insert(ic.caller().toHex(), updatedOrder);
+        persistedOrders.insert(ic.caller().toText(), updatedOrder);
         res.json(updatedOrder);
     });
 

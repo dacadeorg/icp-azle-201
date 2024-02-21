@@ -1,7 +1,9 @@
 import React from "react";
 import { Dropdown, Stack } from "react-bootstrap";
+import { NotificationSuccess } from "./utils/Notifications";
+import { toast } from "react-toastify";
 
-const Wallet = ({ principal, balance, symbol, isAuthenticated, destroy }) => {
+const Wallet = ({ address, principal, balance, symbol, isAuthenticated, destroy }) => {
   if (isAuthenticated) {
     return (
       <>
@@ -16,10 +18,19 @@ const Wallet = ({ principal, balance, symbol, isAuthenticated, destroy }) => {
           </Dropdown.Toggle>
 
           <Dropdown.Menu className="shadow-lg border-0">
-            <Dropdown.Item>
+            <Dropdown.Item onClick={() => { navigator.clipboard.writeText(principal); toast(<NotificationSuccess text="Copied principal" />) }}>
               <Stack direction="horizontal" gap={2}>
                 <i className="bi bi-person-circle fs-4" />
-                <span className="font-monospace">{principal}</span>
+                <span className="font-monospace">Principal: {principal}</span>
+              </Stack>
+            </Dropdown.Item>
+
+            <Dropdown.Divider />
+
+            <Dropdown.Item onClick={() => { navigator.clipboard.writeText(address); toast(<NotificationSuccess text="Copied address" />) }}>
+              <Stack direction="horizontal" gap={2}>
+                <i className="bi bi-wallet2 fs-4" />
+                <span className="font-monospace">Address: {address}</span>
               </Stack>
             </Dropdown.Item>
 

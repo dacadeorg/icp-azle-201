@@ -57,16 +57,13 @@ where:
 
 ### Internet identity canister
 
-`dfx deploy internet_identity` - that is the canister that handles the authentication flow. Once it's deployed, the `js-agent` library will be talking to it to register identities. There is UI that acts as a wallet where you can select existing identities
+`deploy-local-identity.sh` - deploys an identity canister and outputs the canister id to `.env` as the `IDENTITY_CANISTER_ID` variable. Once it's deployed, the `js-agent` library will be talking to it to register identities. There is UI that acts as a wallet where you can select existing identities
 or create a new one.
 
 ### Marketplace canister
 
-`dfx deploy dfinity_js_backend` - deploys the marketplace canister where the business logic is implemented.
+`deploy-local-backend-canister.sh` - deploys the marketplace canister where the business logic is implemented and outputs the canister id to `.env` as the `BACKEND_CANISTER_ID` variable.
 Basically, it implements functions like add, view, update, delete, and buy products + a set of helper functions.
-
-Do not forget to run `dfx generate dfinity_js_backend` anytime you add/remove functions in the canister or when you change the signatures.
-Otherwise, these changes won't be reflected in IDL's and won't work when called using the JS agent.
 
 ### Marketplace frontend canister
 `dfx deploy dfinity_js_frontend` - deployes the frontend app for the `dfinity_js_backend` canister on IC.

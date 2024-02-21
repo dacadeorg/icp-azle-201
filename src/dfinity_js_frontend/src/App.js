@@ -8,19 +8,36 @@ import { login, logout as destroy } from "./utils/auth";
 import { balance as principalBalance } from "./utils/ledger"
 import Cover from "./components/utils/Cover";
 import { Notification } from "./components/utils/Notifications";
+import { isAuthenticated, getPrincipalText } from "./utils/auth";
+import { getAddressFromPrincipal } from "./utils/marketplace";
 
 
 const App = function AppWrapper() {
-  const isAuthenticated = window.auth.isAuthenticated;
-  const principal = window.auth.principalText;
-
+  const [authenticated, setAuthenticated] = useState(false);
+  const [principal, setPrincipal] = useState('');
+  const [address, setAddress] = useState('');
   const [balance, setBalance] = useState("0");
 
   const getBalance = useCallback(async () => {
-    if (isAuthenticated) {
+    if (authenticated) {
       setBalance(await principalBalance());
     }
   });
+
+  useEffect(async () => {
+    setAuthenticated(await isAuthenticated());
+  }, [setAuthenticated]);
+
+  useEffect(async () => {
+    const principal = await getPrincipalText();
+    setPrincipal(principal);
+  }, [setPrincipal]);
+
+  useEffect(async () => {
+    const principal = await getPrincipalText();
+    const address = await getAddressFromPrincipal(principal);
+    setAddress(address);
+  }, [setAddress]);
 
   useEffect(() => {
     getBalance();
@@ -29,15 +46,16 @@ const App = function AppWrapper() {
   return (
     <>
     <Notification />
-      {isAuthenticated ? (
+      {authenticated ? (
         <Container fluid="md">
           <Nav className="justify-content-end pt-3 pb-5">
             <Nav.Item>
               <Wallet
+                address={address}
                 principal={principal}
                 balance={balance}
                 symbol={"ICP"}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={authenticated}
                 destroy={destroy}
               />
             </Nav.Item>

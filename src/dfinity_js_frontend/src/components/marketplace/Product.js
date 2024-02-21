@@ -39,7 +39,7 @@ const Product = ({ product, buy }) => {
             onClick={triggerBuy}
             className="w-100 py-3"
           >
-            Buy for {(price / BigInt(10**8)).toString()} ICP
+            Buy for {(BigInt(price) / BigInt(10**8)).toString()} ICP
           </Button>
         </Card.Body>
       </Card>
