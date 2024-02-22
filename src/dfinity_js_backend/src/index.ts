@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Server, StableBTreeMap, ic, Principal, None, nat64, text, bool, Duration } from 'azle';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
 import {
     Ledger, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
 } from "azle/canisters/ledger";
@@ -40,7 +39,7 @@ class Order {
     productId: string;
     price: number;
     status: string;
-    seller: string; // Principal
+    seller: string;
     paid_at_block: number | null;
     memo: string
 }
@@ -59,9 +58,9 @@ class Order {
  * Constructor values:
  * 1) 0 - memory id where to initialize a map.
  */
-const productsStorage = StableBTreeMap<string, Product>(33);
-const persistedOrders = StableBTreeMap<string, Order>(34);
-const pendingOrders = StableBTreeMap<string, Order>(35);
+const productsStorage = StableBTreeMap<string, Product>(0);
+const persistedOrders = StableBTreeMap<string, Order>(1);
+const pendingOrders = StableBTreeMap<string, Order>(2);
 
 const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
 
@@ -75,21 +74,21 @@ export default Server(() => {
     const app = express();
     // only for development purposes. For production-ready apps one must configure CORS appropriately
     app.use(cors());
-    app.use(bodyParser.json());
+    app.use(express.json());
 
-    app.get("/products", (req: Request, res: Response) => {
+    app.get("/products", (req, res) => {
         res.json(productsStorage.values());
     });
 
-    app.get("/orders", (req: Request, res: Response) => {
+    app.get("/orders", (req, res) => {
         res.json(persistedOrders.values());
     });
 
-    app.get("/pending-orders", (req: Request, res: Response) => {
+    app.get("/pending-orders", (req, res) => {
         res.json(pendingOrders.values());
     });
 
-    app.delete("/pending-orders/:memo", (req: Request, res: Response) => {
+    app.delete("/pending-orders/:memo", (req, res) => {
         const deletedPendingOrderOpt = pendingOrders.remove(req.params.memo);
         if ("None" in deletedPendingOrderOpt) {
             res.status(400).send(`couldn't delete a pending order with memo=${req.params.memo}. order not found`);
@@ -98,7 +97,7 @@ export default Server(() => {
         }
     });
 
-    app.get("/products/:id", (req: Request, res: Response) => {
+    app.get("/products/:id", (req, res) => {
         const productId = req.params.id;
         const productOpt = productsStorage.get(productId);
         if ("None" in productOpt) {
@@ -108,14 +107,14 @@ export default Server(() => {
         }
     });
 
-    app.post("/products", (req: Request, res: Response) => {
+    app.post("/products", (req, res) => {
         const payload = req.body as ProductPayload;
         const product = { id: uuidv4(), soldAmount: 0, seller: ic.caller().toText(), ...payload };
         productsStorage.insert(product.id, product);
         return res.json(product);
     });
 
-    app.put("/products/:id", (req: Request, res: Response) => {
+    app.put("/products/:id", (req, res) => {
         const productId = req.params.id;
         const payload = req.body as ProductPayload;
         const productOpt = productsStorage.get(productId);
@@ -129,7 +128,7 @@ export default Server(() => {
         }
     });
 
-    app.delete("/products/:id", (req: Request, res: Response) => {
+    app.delete("/products/:id", (req, res) => {
         const productId = req.params.id;
         const deletedProductOpt = productsStorage.remove(productId);
         if ("None" in deletedProductOpt) {
@@ -156,7 +155,7 @@ export default Server(() => {
         the caller identity in the `ledger.transfer()` would be the principal of the canister from which we just made this call - in our case it's the marketplace canister.
         That's we split this flow into three parts.
     */
-    app.post("/orders", (req: Request, res: Response) => {
+    app.post("/orders", (req, res) => {
         const productOpt = productsStorage.get(req.body.productId);
         if ("None" in productOpt) {
             res.send(`cannot create the order: product=${req.body.productId} not found`);
@@ -176,23 +175,24 @@ export default Server(() => {
         }
     });
 
-    app.put("/orders/:id", async (req: Request, res: Response) => {
-        const { seller, price, block, memo } = req.body;
+    app.put("/orders/:memo", async (req, res) => {
+        const { seller, price, block } = req.body;
+        const memo = req.params.memo as unknown as nat64;
         const paymentVerified = await verifyPaymentInternal(seller, price, block, memo);
         if (!paymentVerified) {
             res.send(`cannot complete the purchase: cannot verify the payment, memo=${memo}`);
             return;
         }
-        const pendingOrderOpt = pendingOrders.remove(memo);
+        const pendingOrderOpt = pendingOrders.remove(req.params.memo);
         if ("None" in pendingOrderOpt) {
-            res.send(`cannot complete the purchase: there is no pending order with id=${req.params.id}`);
+            res.send(`cannot complete the purchase: there is no pending order with id=${memo}`);
             return;
         }
         const order = pendingOrderOpt.Some;
         const updatedOrder = { ...order, status: OrderStatus[OrderStatus.Completed], paid_at_block: block };
-        const productOpt = productsStorage.get(req.params.id);
+        const productOpt = productsStorage.get(order.productId);
         if ("None" in productOpt) {
-            res.status(404).send(`product with id=${req.params.id} not found`);
+            res.status(404).send(`product with id=${order.productId} not found`);
             return;
         }
         const product = productOpt.Some;
@@ -209,13 +209,12 @@ export default Server(() => {
         The `length` parameter is set to 1 to limit the return amount of blocks.
         In this function we verify all the details about the transaction to make sure that we can mark the order as completed
     */
-    app.get("/verify-payment", async (req: Request, res: Response) => {
+    app.get("/verify-payment", async (req, res) => {
         const memo = req.query.memo as unknown as nat64;
         const receiver: string = req.query.receiver as string;
         const amount = req.query.amount as unknown as nat64;
         const block = req.query.block as unknown as nat64;
-        const receiverPrincipal = Principal.fromHex(receiver);
-        const payment = await verifyPaymentInternal(receiverPrincipal, amount, block, memo);
+        const payment = await verifyPaymentInternal(receiver, amount, block, memo);
         res.json(payment);
     });
 
@@ -223,13 +222,13 @@ export default Server(() => {
         a helper function to get address from the principal
         the address is later used in the transfer method
     */
-    app.get("/principal-to-address/:principalHex", (req: Request, res: Response) => {
-        const principal = Principal.fromHex(req.params.principalHex);
-        res.json(hexAddressFromPrincipal(principal, 0));
+    app.get("/principal-to-address/:principalHex", (req, res) => {
+        const principal = Principal.fromText(req.params.principalHex);
+        res.json({account: hexAddressFromPrincipal(principal, 0)});
     });
 
     // not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
-    app.put("/payment/:id", async (req: Request, res: Response) => {
+    app.put("/payment/:id", async (req, res) => {
         const toPrincipal = Principal.fromText(req.body.to);
         const toAddress = hexAddressFromPrincipal(toPrincipal, 0);
         const transferFeeResponse = await ic.call(icpCanister.transfer_fee, { args: [{}] });
@@ -281,7 +280,8 @@ function discardByTimeout(memo: string, delay: Duration) {
     });
 };
 
-async function verifyPaymentInternal(receiver: Principal, amount: nat64, block: nat64, memo: nat64): Promise<bool> {
+async function verifyPaymentInternal(receiverTextVal: string, amount: nat64, block: nat64, memo: nat64): Promise<bool> {
+    const receiver = Principal.fromText(receiverTextVal);
     const blockData = await ic.call(icpCanister.query_blocks, { args: [{ start: block, length: 1n }] });
     const tx = blockData.blocks.find((block) => {
         if ("None" in block.transaction.operation) {
@@ -290,10 +290,10 @@ async function verifyPaymentInternal(receiver: Principal, amount: nat64, block: 
         const operation = block.transaction.operation.Some;
         const senderAddress = binaryAddressFromPrincipal(ic.caller(), 0);
         const receiverAddress = binaryAddressFromPrincipal(receiver, 0);
-        return block.transaction.memo === memo &&
+        return block.transaction.memo === BigInt(memo) &&
             hash(senderAddress) === hash(operation.Transfer?.from) &&
             hash(receiverAddress) === hash(operation.Transfer?.to) &&
-            amount === operation.Transfer?.amount.e8s;
+            BigInt(amount) === operation.Transfer?.amount.e8s;
     });
     return tx ? true : false;
 };

@@ -6,13 +6,13 @@ import { idlFactory as ledgerIDL } from "../../../declarations/ledger_canister/l
 
 const LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 
-export async function transferICP(sellerAddress, amount, memo) {
+export async function transferICP(account, amount, memo) {
     const canister =  await getLedgerCanister();
-    const account = AccountIdentifier.fromHex(sellerAddress);
+    const accountIdentifier = AccountIdentifier.fromHex(account.account);
     const result = await canister.transfer({
-        to: account.toUint8Array(),
+        to: accountIdentifier.toUint8Array(),
         amount: { e8s: amount },
-        memo,
+        memo: Number(memo),
         fee: { e8s: 10000n },
         from_subaccount: [],
         created_at_time: []
@@ -27,8 +27,8 @@ export async function balance() {
     }
     const canister =  await getLedgerCanister();
     const principal = await getPrincipalText();
-    const address = await getAddressFromPrincipal(principal);
-    const balance = await canister.account_balance_dfx({account: address});
+    const account = await getAddressFromPrincipal(principal);
+    const balance = await canister.account_balance_dfx(account);
     return (balance.e8s / BigInt(10**8)).toString();
 }
 

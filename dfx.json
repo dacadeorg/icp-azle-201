@@ -18,6 +18,7 @@
     },
     "dfinity_js_backend": {
       "type": "custom",
+      "candid_gen": "http",
       "main": "src/dfinity_js_backend/src/index.ts",
       "candid": "src/dfinity_js_backend/src/index.did",
       "build": "npx azle dfinity_js_backend",

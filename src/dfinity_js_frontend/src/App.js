@@ -35,8 +35,8 @@ const App = function AppWrapper() {
 
   useEffect(async () => {
     const principal = await getPrincipalText();
-    const address = await getAddressFromPrincipal(principal);
-    setAddress(address);
+    const account = await getAddressFromPrincipal(principal);
+    setAddress(account.account);
   }, [setAddress]);
 
   useEffect(() => {
