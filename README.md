@@ -47,13 +47,22 @@ Switch to the minter identity:
 `dfx identity use minter`
 
 Transfer ICP:
-`dfx ledger transfer <ADDRESS>  --memo 0 --icp 100 --fee 0`
+`dfx ledger transfer <ADDRESS> --memo 0 --icp 100 --fee 0`
 where:
  - `--memo` is some correlation id that can be set to identify some particular transactions (we use that in the marketplace canister).
  - `--icp` is the transfer amount
  - `--fee` is the transaction fee. In this case it's 0 because we make this transfer as the minter idenity thus this transaction is of type MINT, not TRANSFER.
  - `<ADDRESS>` is the address of the recipient. To get the address from the principal, you can use the helper function from the marketplace canister - `getAddressFromPrincipal(principal: Principal)`, it can be called via the Candid UI.
 
+### ICRC2 ledger canister
+
+`deploy-local-icrc-ledger.sh` - deploys an ICRC2 canister.
+
+Transfer ICRC token:
+`dfx canister call icrc1_ledger_canister icrc1_transfer '(record { to = record { owner = principal "<PRINCIPAL>";};  amount = <AMOUNT>;})'`
+where:
+- `<PRINCIPAL>` is the principal string of the receiver
+- `<AMOUNT>` is the amount of token to be transferred
 
 ### Internet identity canister
 
@@ -61,6 +70,9 @@ where:
 or create a new one.
 
 ### Marketplace canister
+
+Switch to the default identity:
+`dfx identity use default`
 
 `deploy-local-backend-canister.sh` - deploys the marketplace canister where the business logic is implemented and outputs the canister id to `.env` as the `BACKEND_CANISTER_ID` variable.
 Basically, it implements functions like add, view, update, delete, and buy products + a set of helper functions.

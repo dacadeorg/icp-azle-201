@@ -18,12 +18,12 @@
     "gen-deploy:local": "dfx generate dfinity_js_backend && dfx deploy --network=local"
   },
   "dependencies": {
-    "@dfinity/agent": "^0.19.2",
+    "@dfinity/agent": "^0.19.3",
     "@dfinity/auth-client": "^0.19.2",
-    "@dfinity/candid": "^0.19.2",
+    "@dfinity/candid": "^0.19.3",
     "@dfinity/ledger": "^0.0.15",
     "@dfinity/nns": "^0.16.7",
-    "@dfinity/principal": "^0.19.2",
+    "@dfinity/principal": "^0.19.3",
     "@dfinity/utils": "^0.0.22",
     "@popperjs/core": "^2.10.2",
     "@testing-library/jest-dom": "^5.11.4",
@@ -35,7 +35,6 @@
     "bootstrap-icons": "^1.7.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "hashcode": "^1.0.3",
     "prop-types": "^15.7.2",
     "react": "^17.0.2",
     "react-bootstrap": "^2.0.3",

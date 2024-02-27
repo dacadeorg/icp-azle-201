@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+dfx identity use default
+
 dfx deploy internet_identity
 
 sed -i '' /^IDENTITY_CANISTER_ID/d .env

@@ -1,4 +1,4 @@
-import { transferICP } from "./ledger";
+import { approve } from "./icrc2_ledger";
 import { createCanisterActor } from "./canisterFactory";
 import { idlFactory as marketPlaceIDL } from "../../../declarations/dfinity_js_backend/dfinity_js_backend.did.js";
 import IcHttp from "./ichttp";
@@ -19,18 +19,7 @@ export async function getProducts() {
 }
 
 export async function buyProduct(product) {
-  try {
-    const orderResponse = await httpClient.POST({path: "/orders", data: {productId: product.id}});
-    const sellerAddress = await getAddressFromPrincipal(orderResponse.seller);
-    const block = await transferICP(sellerAddress, orderResponse.price, orderResponse.memo);
-    const data = {
-      seller: orderResponse.seller,
-      price: orderResponse.price,
-      block: Number(block)
-    }
-    return await httpClient.PUT({path: `/orders/${orderResponse.memo}`, data})
-  } catch(err) {
-    console.err(err);
-    throw err;
-  }
+  const { id, price } = { ...product };
+  await approve(process.env.BACKEND_CANISTER_ID, price);
+  return await httpClient.POST({path: "/orders", data: {productId: id}});
 }

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+dfx identity use default
+
 dfx generate dfinity_js_backend
 dfx deploy dfinity_js_backend
 

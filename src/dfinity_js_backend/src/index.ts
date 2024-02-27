@@ -1,11 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Server, StableBTreeMap, ic, Principal, None, nat64, text, bool, Duration } from 'azle';
-import express, { Request, Response } from 'express';
+import { Server, StableBTreeMap, ic, Principal, None } from 'azle';
+import express from 'express';
 import cors from 'cors';
-import {
-    Ledger, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
-} from "azle/canisters/ledger";
-import { hashCode } from "hashcode";
+import { Ledger, hexAddressFromPrincipal, binaryAddressFromAddress } from "azle/canisters/ledger";
+import { ICRC } from 'azle/canisters/icrc';
 
 /**
  * This type represents a product that can be listed on a marketplace.
@@ -40,8 +38,6 @@ class Order {
     price: number;
     status: string;
     seller: string;
-    paid_at_block: number | null;
-    memo: string
 }
 
 /**
@@ -59,16 +55,14 @@ class Order {
  * 1) 0 - memory id where to initialize a map.
  */
 const productsStorage = StableBTreeMap<string, Product>(0);
-const persistedOrders = StableBTreeMap<string, Order>(1);
-const pendingOrders = StableBTreeMap<string, Order>(2);
-
-const ORDER_RESERVATION_PERIOD = 120n; // reservation period in seconds
+const orders = StableBTreeMap<string, Order>(1);
 
 /* 
     initialization of the Ledger canister. The principal text value is hardcoded because 
     we set it in the `dfx.json`
 */
 const icpCanister = Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
+const icrc = ICRC(Principal.fromText("mxzaz-hqaaa-aaaar-qaada-cai"));
 
 export default Server(() => {
     const app = express();
@@ -81,20 +75,7 @@ export default Server(() => {
     });
 
     app.get("/orders", (req, res) => {
-        res.json(persistedOrders.values());
-    });
-
-    app.get("/pending-orders", (req, res) => {
-        res.json(pendingOrders.values());
-    });
-
-    app.delete("/pending-orders/:memo", (req, res) => {
-        const deletedPendingOrderOpt = pendingOrders.remove(req.params.memo);
-        if ("None" in deletedPendingOrderOpt) {
-            res.status(400).send(`couldn't delete a pending order with memo=${req.params.memo}. order not found`);
-        } else {
-            res.json(deletedPendingOrderOpt.Some);
-        }
+        res.json(orders.values());
     });
 
     app.get("/products/:id", (req, res) => {
@@ -139,83 +120,32 @@ export default Server(() => {
     });
 
     /*
-        on create order we generate a hashcode of the order and then use this number as corelation id (memo) in the transfer function
-        the memo is later used to identify a payment for this particular order.
-
-        The entire flow is divided into the three main parts:
-            1. Create an order
-            2. Pay for the order (transfer ICP to the seller). 
-            3. Complete the order (use memo from step 1 and the transaction block from step 2)
-            
-        Step 2 is done on the FE app because we cannot create an order and transfer ICP in the scope of the single method. 
-        When we call the `createOrder` method, the ic.caller() would the principal of the identity which initiated this call in the frontend app. 
-        However, if we call `ledger.transfer()` from `createOrder` function, the principal of the original caller won't be passed to the 
-        ledger canister when we make this call. 
-        In this case, when we call `ledger.transfer()` from the `createOrder` method,
-        the caller identity in the `ledger.transfer()` would be the principal of the canister from which we just made this call - in our case it's the marketplace canister.
-        That's we split this flow into three parts.
+        Before the order is received, the icrc2_approve is called - that's where we create
+        an allowance entry for the canister to make a transfer of an ICRC token on behalf of the sender to the seller of the product.
+        Here, we make an allowance transfer by calling icrc2_transfer_from.
     */
-    app.post("/orders", (req, res) => {
+    app.post("/orders", async (req, res) => {
         const productOpt = productsStorage.get(req.body.productId);
         if ("None" in productOpt) {
             res.send(`cannot create the order: product=${req.body.productId} not found`);
         } else {
             const product = productOpt.Some;
+            const allowanceResponse = await allowanceTransfer(product.seller, BigInt(product.price));
+            if (allowanceResponse.Err) {
+                res.send(allowanceResponse.Err);
+                return;
+            }
             const order: Order = {
                 productId: product.id,
                 price: product.price,
-                status: OrderStatus[OrderStatus.PaymentPending],
-                seller: product.seller,
-                paid_at_block: null,
-                memo: generateCorrelationId(req.body.id).toString()
+                status: OrderStatus[OrderStatus.Completed],
+                seller: product.seller
             };
-            pendingOrders.insert(order.memo, order);
-            discardByTimeout(order.memo, ORDER_RESERVATION_PERIOD);
-            return res.json(order);
+            orders.insert(uuidv4(), order);
+            product.soldAmount += 1;
+            productsStorage.insert(product.id, product);
+            res.json(order);
         }
-    });
-
-    app.put("/orders/:memo", async (req, res) => {
-        const { seller, price, block } = req.body;
-        const memo = req.params.memo as unknown as nat64;
-        const paymentVerified = await verifyPaymentInternal(seller, price, block, memo);
-        if (!paymentVerified) {
-            res.send(`cannot complete the purchase: cannot verify the payment, memo=${memo}`);
-            return;
-        }
-        const pendingOrderOpt = pendingOrders.remove(req.params.memo);
-        if ("None" in pendingOrderOpt) {
-            res.send(`cannot complete the purchase: there is no pending order with id=${memo}`);
-            return;
-        }
-        const order = pendingOrderOpt.Some;
-        const updatedOrder = { ...order, status: OrderStatus[OrderStatus.Completed], paid_at_block: block };
-        const productOpt = productsStorage.get(order.productId);
-        if ("None" in productOpt) {
-            res.status(404).send(`product with id=${order.productId} not found`);
-            return;
-        }
-        const product = productOpt.Some;
-        product.soldAmount += 1;
-        productsStorage.insert(product.id, product);
-        persistedOrders.insert(ic.caller().toText(), updatedOrder);
-        res.json(updatedOrder);
-    });
-
-    /*
-        another example of a canister-to-canister communication
-        here we call the `query_blocks` function on the ledger canister
-        to get a single block with the given number `start`.
-        The `length` parameter is set to 1 to limit the return amount of blocks.
-        In this function we verify all the details about the transaction to make sure that we can mark the order as completed
-    */
-    app.get("/verify-payment", async (req, res) => {
-        const memo = req.query.memo as unknown as nat64;
-        const receiver: string = req.query.receiver as string;
-        const amount = req.query.amount as unknown as nat64;
-        const block = req.query.block as unknown as nat64;
-        const payment = await verifyPaymentInternal(receiver, amount, block, memo);
-        res.json(payment);
     });
 
     /*
@@ -224,7 +154,7 @@ export default Server(() => {
     */
     app.get("/principal-to-address/:principalHex", (req, res) => {
         const principal = Principal.fromText(req.params.principalHex);
-        res.json({account: hexAddressFromPrincipal(principal, 0)});
+        res.json({ account: hexAddressFromPrincipal(principal, 0) });
     });
 
     // not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
@@ -256,49 +186,26 @@ export default Server(() => {
     return app.listen();
 });
 
-/*
-    a hash function that is used to generate correlation ids for orders.
-    also, we use that in the verifyPayment function where we check if the used has actually paid the order
-*/
-function hash(input: any): bigint {
-    return BigInt(Math.abs(hashCode().value(input)));
-};
-
-function generateCorrelationId(productId: text): bigint {
-    const correlationId = `${productId}_${ic.caller().toText()}_${ic.time()}`;
-    return hash(correlationId);
-};
-
-/*
-    after the order is created, we give the `delay` amount of minutes to pay for the order.
-    if it's not paid during this timeframe, the order is automatically removed from the pending orders.
-*/
-function discardByTimeout(memo: string, delay: Duration) {
-    ic.setTimer(delay, () => {
-        const order = pendingOrders.remove(memo);
-        console.log(`Order discarded: memo=${order?.Some?.memo}, productId=${order?.Some?.productId}`);
-    });
-};
-
-async function verifyPaymentInternal(receiverTextVal: string, amount: nat64, block: nat64, memo: nat64): Promise<bool> {
-    const receiver = Principal.fromText(receiverTextVal);
-    const blockData = await ic.call(icpCanister.query_blocks, { args: [{ start: block, length: 1n }] });
-    const tx = blockData.blocks.find((block) => {
-        if ("None" in block.transaction.operation) {
-            return false;
-        }
-        const operation = block.transaction.operation.Some;
-        const senderAddress = binaryAddressFromPrincipal(ic.caller(), 0);
-        const receiverAddress = binaryAddressFromPrincipal(receiver, 0);
-        return block.transaction.memo === BigInt(memo) &&
-            hash(senderAddress) === hash(operation.Transfer?.from) &&
-            hash(receiverAddress) === hash(operation.Transfer?.to) &&
-            BigInt(amount) === operation.Transfer?.amount.e8s;
-    });
-    return tx ? true : false;
-};
-
 function getCurrentDate() {
     const timestamp = new Number(ic.time());
     return new Date(timestamp.valueOf() / 1000_000);
+}
+
+async function allowanceTransfer(to: string, amount: bigint) {
+    try {
+        return await ic.call(icrc.icrc2_transfer_from, {
+            args: [{
+                spender_subaccount: None,
+                created_at_time: None,
+                memo: None,
+                amount: amount,
+                fee: None,
+                from: { owner: ic.caller(), subaccount: None },
+                to: { owner: Principal.fromText(to), subaccount: None }
+            }]
+        });
+    } catch (err) {
+        console.log("error on approval transfer: ", err);
+        throw err;
+    }
 }
