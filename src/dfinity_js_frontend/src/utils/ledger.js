@@ -1,5 +1,5 @@
 import { createCanisterActor } from "./canisterFactory";
-import { getPrincipalText, isAuthenticated } from "./auth";
+import { getPrincipalText, isAuthenticated, logout } from "./auth";
 import { getAddressFromPrincipal } from "./marketplace";
 import { idlFactory as ledgerIDL } from "../../../declarations/ledger_canister/ledger_canister.did.js";
 
@@ -12,9 +12,15 @@ export async function icpBalance() {
     }
     const canister = await getLedgerCanister();
     const principal = await getPrincipalText();
-    const account = await getAddressFromPrincipal(principal);
-    const balance = await canister.account_balance_dfx(account);
-    return (balance.e8s / BigInt(10 ** 8)).toString();
+    try {
+        const account = await getAddressFromPrincipal(principal);
+        const balance = await canister.account_balance_dfx(account);
+        return (balance.e8s / BigInt(10 ** 8)).toString();
+    } catch(err) {
+        if (err.name === 'AgentHTTPResponseError') {
+            logout();
+        }
+    }
 }
 
 async function getLedgerCanister() {
