@@ -8,21 +8,28 @@
     },
     "ledger_canister": {
       "type": "custom",
-      "candid": "https://raw.githubusercontent.com/dfinity/ic/ca5e5052886de781021506814d2c6502e375da48/rs/rosetta-api/icp_ledger/ledger.did",
-      "wasm": "https://download.dfinity.systems/ic/ca5e5052886de781021506814d2c6502e375da48/canisters/ledger-canister.wasm.gz",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icp_ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ledger-canister.wasm.gz",
       "remote": {
         "id": {
           "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
         }
       }
     },
+    "icrc1_ledger_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ic-icrc1-ledger.wasm.gz"
+    },
     "dfinity_js_backend": {
       "type": "custom",
+      "candid_gen": "http",
       "main": "src/dfinity_js_backend/src/index.ts",
       "candid": "src/dfinity_js_backend/src/index.did",
       "build": "npx azle dfinity_js_backend",
       "wasm": ".azle/dfinity_js_backend/dfinity_js_backend.wasm",
-      "gzip": true
+      "gzip": true,
+      "assets": [["src/declarations/icrc1-ledger/icrc1-ledger.did", "src/icrc1-ledger.did"]]
     },
     "dfinity_js_frontend": {
       "dependencies": [

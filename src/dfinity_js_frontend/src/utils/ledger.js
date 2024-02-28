@@ -1,22 +1,28 @@
-import { AccountIdentifier } from "@dfinity/nns";
+import { createCanisterActor } from "./canisterFactory";
+import { getPrincipalText, isAuthenticated, logout } from "./auth";
+import { getAddressFromPrincipal } from "./marketplace";
+import { idlFactory as ledgerIDL } from "../../../declarations/ledger_canister/ledger_canister.did.js";
 
-export async function transferICP(sellerAddress, amount, memo) {
-    const canister = window.canister.ledger;
-    const account = AccountIdentifier.fromHex(sellerAddress);
-    const result = await canister.transfer({
-        to: account.toUint8Array(),
-        amount: { e8s: amount },
-        memo,
-        fee: { e8s: 10000n },
-        from_subaccount: [],
-        created_at_time: []
-    });
-    return result.Ok;
+const LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+
+export async function icpBalance() {
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
+        return "0";
+    }
+    const canister = await getLedgerCanister();
+    const principal = await getPrincipalText();
+    try {
+        const account = await getAddressFromPrincipal(principal);
+        const balance = await canister.account_balance_dfx(account);
+        return (balance.e8s / BigInt(10 ** 8)).toString();
+    } catch(err) {
+        if (err.name === 'AgentHTTPResponseError') {
+            logout();
+        }
+    }
 }
 
-export async function balance() {
-    const canister = window.canister.ledger;
-    const address = await window.canister.marketplace.getAddressFromPrincipal(window.auth.principal);
-    const balance = await canister.account_balance_dfx({account: address});
-    return (balance?.e8s / BigInt(10**8)).toString();
+async function getLedgerCanister() {
+    return createCanisterActor(LEDGER_CANISTER_ID, ledgerIDL);
 }

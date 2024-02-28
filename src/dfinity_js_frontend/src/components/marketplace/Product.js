@@ -3,12 +3,11 @@ import PropTypes from "prop-types";
 import { Card, Button, Col, Badge, Stack } from "react-bootstrap";
 import { Principal } from "@dfinity/principal";
 
-const Product = ({ product, buy }) => {
-  const { id, price, title, description, location, attachmentURL, seller, soldAmount } =
-    product;
+const Product = ({ tokemMetadata, product, buy }) => {
+  const { id, price, title, description, location, attachmentURL, seller, soldAmount } = product;
 
   const triggerBuy = () => {
-    buy(id);
+    buy(id, price);
   };
 
   return (
@@ -39,7 +38,7 @@ const Product = ({ product, buy }) => {
             onClick={triggerBuy}
             className="w-100 py-3"
           >
-            Buy for {(price / BigInt(10**8)).toString()} ICP
+            Buy for {price} {tokemMetadata.tokenSymbol}
           </Button>
         </Card.Body>
       </Card>

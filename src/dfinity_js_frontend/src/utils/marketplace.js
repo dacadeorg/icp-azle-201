@@ -1,27 +1,25 @@
-import { Principal } from "@dfinity/principal";
-import { transferICP } from "./ledger";
+import { approve } from "./icrc2_ledger";
+import { createCanisterActor } from "./canisterFactory";
+import { idlFactory as marketPlaceIDL } from "../../../declarations/dfinity_js_backend/dfinity_js_backend.did.js";
+import IcHttp from "./ichttp";
 
-export async function createProduct(product) {
-  return window.canister.marketplace.addProduct(product);
+const marketplaceAgentCanister = await createCanisterActor(process.env.BACKEND_CANISTER_ID, marketPlaceIDL);
+const httpClient = new IcHttp(marketplaceAgentCanister);
+
+export async function createProduct(data) {
+  return httpClient.POST({path: "/products", data});
+}
+
+export async function getAddressFromPrincipal(principalHex) {
+  return httpClient.GET({path: `/principal-to-address/${principalHex}`});
 }
 
 export async function getProducts() {
-  try {
-    return await window.canister.marketplace.getProducts();
-  } catch (err) {
-    if (err.name === "AgentHTTPResponseError") {
-      const authClient = window.auth.client;
-      await authClient.logout();
-    }
-    return [];
-  }
+  return httpClient.GET({path: "/products"});
 }
 
 export async function buyProduct(product) {
-  const marketplaceCanister = window.canister.marketplace;
-  const orderResponse = await marketplaceCanister.createOrder(product.id);
-  const sellerPrincipal = Principal.from(orderResponse.Ok.seller);
-  const sellerAddress = await marketplaceCanister.getAddressFromPrincipal(sellerPrincipal);
-  const block = await transferICP(sellerAddress, orderResponse.Ok.price, orderResponse.Ok.memo);
-  await marketplaceCanister.completePurchase(sellerPrincipal, product.id, orderResponse.Ok.price, block, orderResponse.Ok.memo);
+  const { id, price } = { ...product };
+  await approve(process.env.BACKEND_CANISTER_ID, price);
+  return await httpClient.POST({path: "/orders", data: {productId: id}});
 }

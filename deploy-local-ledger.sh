@@ -3,12 +3,13 @@
 # Change the variable to "ic" to deploy the ledger on the mainnet.
 export NETWORK=local
 
+dfx identity use default
+export DEFAULT_ACCOUNT_ID=$(dfx ledger account-id)
 dfx identity new minter --storage-mode=plaintext
 dfx identity use minter
 export MINTER_ACCOUNT_ID=$(dfx ledger account-id)
-dfx identity use default
-export DEFAULT_ACCOUNT_ID=$(dfx ledger account-id)
-dfx identity use minter
+
+dfx generate ledger_canister
 
 dfx deploy --specified-id ryjl3-tyaaa-aaaaa-aaaba-cai ledger_canister --argument '(variant {
     Init = record {
