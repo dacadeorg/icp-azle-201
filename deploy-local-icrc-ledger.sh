@@ -24,6 +24,8 @@ export FEATURE_FLAGS=true
 
 dfx identity use default
 
+dfx generate icrc1_ledger_canister
+
 dfx deploy icrc1_ledger_canister --specified-id mxzaz-hqaaa-aaaar-qaada-cai --argument "(variant {Init = 
 record {
      token_symbol = \"${TOKEN_SYMBOL}\";
@@ -41,4 +43,3 @@ record {
      };
  }
 })"
-

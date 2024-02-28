@@ -1,9 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Server, StableBTreeMap, ic, Principal, None } from 'azle';
+import { Server, StableBTreeMap, ic, Principal, serialize, Result } from 'azle';
 import express from 'express';
 import cors from 'cors';
-import { Ledger, hexAddressFromPrincipal, binaryAddressFromAddress } from "azle/canisters/ledger";
-import { ICRC } from 'azle/canisters/icrc';
+import { hexAddressFromPrincipal } from "azle/canisters/ledger";
 
 /**
  * This type represents a product that can be listed on a marketplace.
@@ -58,11 +57,10 @@ const productsStorage = StableBTreeMap<string, Product>(0);
 const orders = StableBTreeMap<string, Order>(1);
 
 /* 
-    initialization of the Ledger canister. The principal text value is hardcoded because 
+    initialization of the ICRC Ledger canister. The principal text value is hardcoded because 
     we set it in the `dfx.json`
 */
-const icpCanister = Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
-const icrc = ICRC(Principal.fromText("mxzaz-hqaaa-aaaar-qaada-cai"));
+const ICRC_CANISTER_PRINCIPAL = "mxzaz-hqaaa-aaaar-qaada-cai";
 
 export default Server(() => {
     const app = express();
@@ -157,32 +155,6 @@ export default Server(() => {
         res.json({ account: hexAddressFromPrincipal(principal, 0) });
     });
 
-    // not used right now. can be used for transfers from the canister for instances when a marketplace can hold a balance account for users
-    app.put("/payment/:id", async (req, res) => {
-        const toPrincipal = Principal.fromText(req.body.to);
-        const toAddress = hexAddressFromPrincipal(toPrincipal, 0);
-        const transferFeeResponse = await ic.call(icpCanister.transfer_fee, { args: [{}] });
-        const transferResult = ic.call(icpCanister.transfer, {
-            args: [{
-                memo: 0n,
-                amount: {
-                    e8s: req.body.amount
-                },
-                fee: {
-                    e8s: transferFeeResponse.transfer_fee.e8s
-                },
-                from_subaccount: None,
-                to: binaryAddressFromAddress(toAddress),
-                created_at_time: None
-            }]
-        });
-        if ("Err" in transferResult) {
-            res.send(`payment failed, err=${transferResult.Err}`);
-            return;
-        }
-        res.send("payment completed");
-    });
-
     return app.listen();
 });
 
@@ -191,21 +163,29 @@ function getCurrentDate() {
     return new Date(timestamp.valueOf() / 1000_000);
 }
 
-async function allowanceTransfer(to: string, amount: bigint) {
+async function allowanceTransfer(to: string, amount: bigint): Promise<Result<any, string>> {
     try {
-        return await ic.call(icrc.icrc2_transfer_from, {
-            args: [{
-                spender_subaccount: None,
-                created_at_time: None,
-                memo: None,
-                amount: amount,
-                fee: None,
-                from: { owner: ic.caller(), subaccount: None },
-                to: { owner: Principal.fromText(to), subaccount: None }
-            }]
+        const response = await fetch(`icp://${ICRC_CANISTER_PRINCIPAL}/icrc2_transfer_from`, {
+            body: serialize({
+                candidPath: "/src/icrc1-ledger.did",
+                args: [{
+                    // for optional values use an empty array notation [] instead of None is they should remain empty
+                    spender_subaccount: [],
+                    created_at_time: [],
+                    memo: [],
+                    amount,
+                    fee: [],
+                    from: { owner: ic.caller(), subaccount: [] },
+                    to: { owner: Principal.fromText(to), subaccount: [] }
+                }]
+            })
         });
+        return Result.Ok(response);
     } catch (err) {
-        console.log("error on approval transfer: ", err);
-        throw err;
+        let errorMessage = "an error occurred on approval";
+        if (err instanceof Error) {
+            errorMessage = err.message;
+        }
+        return Result.Err(errorMessage);
     }
 }
