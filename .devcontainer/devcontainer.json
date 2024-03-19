@@ -1,6 +1,6 @@
 {
     "name": "ICP Azle 201",
-    "image": "ghcr.io/dfinity/icp-dev-env-azle:4",
+    "image": "ghcr.io/fxgst/icp-dev-env-azle:11",
     "forwardPorts": [
         4943
     ],
@@ -11,6 +11,7 @@
         }
     },
     "onCreateCommand": "nohup bash -c 'dfx start &'",
+    "updateContentCommand": "sed -i 's/npx azle dfinity_js_backend/npx azle --native-compilation dfinity_js_backend/g' dfx.json",
     "postAttachCommand": "([ -f nohup.out ] && (npm i && cat nohup.out && rm nohup.out)) || exit 0",
     "remoteUser": "root"
 }
