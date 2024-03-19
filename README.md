@@ -1,5 +1,4 @@
 ## Things to be explained in the course:
-
 1. What is Ledger? More details here: https://internetcomputer.org/docs/current/developer-docs/integrations/ledger/
 2. What is Internet Identity? More details here: https://internetcomputer.org/internet-identity
 3. What is Principal, Identity, Address? https://internetcomputer.org/internet-identity | https://yumimarketplace.medium.com/whats-the-difference-between-principal-id-and-account-id-3c908afdc1f9
@@ -17,7 +16,7 @@ If you rather want to use GitHub Codespaces, click this button instead:
 
 **NOTE**: After deploying your canisters in GitHub Codespaces, run `./canister_urls.py` and click the links that are shown there.
 
-If you prefer running VS Code locally and not in the browser, click "Codespaces: ..." or "Gitpod" in the bottom left corner and select "Open in VS Code" in the menu that appears.
+If you prefer running VS Code locally and not in the browser, click "Codespaces: ..." or "Gitpod" in the bottom left corner and select "Open in VS Code" in the menu that appears. 
 If prompted, proceed by installing the recommended plugins for VS Code.
 
 To develop fully locally, first install [Docker](https://www.docker.com/get-started/) and [VS Code](https://code.visualstudio.com/) and start them on your machine.
@@ -28,10 +27,8 @@ Next, click the following button to open the dev container locally:
 ## How to deploy canisters implemented in the course
 
 ### Ledger canister
-
 `./deploy-local-ledger.sh` - deploys a local Ledger canister. IC works differently when run locally so there is no default network token available and you have to deploy it yourself. Remember that it's not a token like ERC-20 in Ethereum, it's a native token for ICP, just deployed separately.
 This canister is described in the `dfx.json`:
-
 ```
 	"ledger_canister": {
   	"type": "custom",
@@ -44,12 +41,11 @@ This canister is described in the `dfx.json`:
   	}
 	}
 ```
-
 `remote.id.ic` - that is the principal of the Ledger canister and it will be available by this principal when you work with the ledger.
 
 Also, in the scope of this script, a minter identity is created which can be used for minting tokens
 for the testing purposes.
-Additionally, the default identity is pre-populated with 1000_000_000_000 e8s which is equal to 10_000 \* 10**8 ICP.
+Additionally, the default identity is pre-populated with 1000_000_000_000 e8s which is equal to 10_000 * 10**8 ICP.
 The decimals value for ICP is 10**8.
 
 List identities:
@@ -61,11 +57,10 @@ Switch to the minter identity:
 Transfer ICP:
 `dfx ledger transfer <ADDRESS> --memo 0 --icp 100 --fee 0`
 where:
-
-- `--memo` is some correlation id that can be set to identify some particular transactions (we use that in the marketplace canister).
-- `--icp` is the transfer amount
-- `--fee` is the transaction fee. In this case it's 0 because we make this transfer as the minter idenity thus this transaction is of type MINT, not TRANSFER.
-- `<ADDRESS>` is the address of the recipient. To get the address from the principal, you can use the helper function from the marketplace canister - `getAddressFromPrincipal(principal: Principal)`, it can be called via the Candid UI.
+ - `--memo` is some correlation id that can be set to identify some particular transactions (we use that in the marketplace canister).
+ - `--icp` is the transfer amount
+ - `--fee` is the transaction fee. In this case it's 0 because we make this transfer as the minter idenity thus this transaction is of type MINT, not TRANSFER.
+ - `<ADDRESS>` is the address of the recipient. To get the address from the principal, you can use the helper function from the marketplace canister - `getAddressFromPrincipal(principal: Principal)`, it can be called via the Candid UI.
 
 ### ICRC2 ledger canister
 
