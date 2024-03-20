@@ -1,6 +1,6 @@
 {
     "name": "ICP Azle 201",
-    "image": "ghcr.io/fxgst/icp-dev-env-azle:11",
+    "image": "ghcr.io/dfinity/icp-dev-env-azle:6",
     "forwardPorts": [
         4943
     ],
